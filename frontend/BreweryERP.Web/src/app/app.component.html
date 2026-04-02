@@ -1,0 +1,51 @@
+<!-- Shell layout — Sidebar + Main -->
+<div class="shell" [class.shell--auth]="!isShellVisible()">
+
+  <!-- ─── Sidebar ──────────────────────────────────────────── -->
+  @if (isShellVisible()) {
+    <aside class="sidebar">
+      <!-- Logo -->
+      <div class="sidebar-logo">
+        <span class="logo-icon">🍺</span>
+        <div>
+          <span class="logo-title">Brewery</span>
+          <span class="logo-sub">ERP System</span>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+        @for (item of navItems; track item.path) {
+          <a
+            class="nav-item"
+            [routerLink]="item.path"
+            routerLinkActive="nav-item--active"
+            [id]="'nav-' + item.label.toLowerCase()">
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-label">{{ item.label }}</span>
+          </a>
+        }
+      </nav>
+
+      <!-- Bottom User info -->
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="user-avatar">{{ userName()[0] | uppercase }}</div>
+          <div class="user-details">
+            <span class="user-name">{{ userName() }}</span>
+            <span class="user-role badge badge-active">{{ userRole() }}</span>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm logout-btn" id="btn-logout" (click)="logout()">
+          ↗ Вийти
+        </button>
+      </div>
+    </aside>
+  }
+
+  <!-- ─── Main area ─────────────────────────────────────────── -->
+  <main class="main-content" [class.main-content--full]="!isShellVisible()">
+    <router-outlet />
+  </main>
+
+</div>
