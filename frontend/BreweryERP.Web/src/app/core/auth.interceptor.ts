@@ -1,23 +1,32 @@
-import { HttpInterceptorFn } from '@angular/common/http';
-import { inject }            from '@angular/core';
-import { AuthService }       from './auth.service';
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { inject }                               from '@angular/core';
+import { catchError, throwError }               from 'rxjs';
+import { AuthService }                          from './auth.service';
 
 /**
- * Appends "Authorization: Bearer <token>" to every API request.
- * Skips /auth/login and /auth/register endpoints.
+ * 1. Додає "Authorization: Bearer <token>" до всіх API-запитів.
+ * 2. При отриманні 401 — автоматично викидає користувача (logout).
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth  = inject(AuthService);
   const token = auth.getToken();
 
-  const isAuthEndpoint = req.url.includes('/auth/login') || req.url.includes('/auth/register');
+  const isAuthEndpoint =
+    req.url.includes('/auth/login') ||
+    req.url.includes('/auth/register');
 
-  if (token && !isAuthEndpoint) {
-    const cloned = req.clone({
-      setHeaders: { Authorization: `Bearer ${token}` }
-    });
-    return next(cloned);
-  }
+  // Клонуємо запит з токеном (якщо є і не auth-endpoint)
+  const authReq = (token && !isAuthEndpoint)
+    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+    : req;
 
-  return next(req);
+  return next(authReq).pipe(
+    catchError((err: HttpErrorResponse) => {
+      // 401 Unauthorized → токен прострочений або невалідний → logout
+      if (err.status === 401 && !isAuthEndpoint) {
+        auth.logout();
+      }
+      return throwError(() => err);
+    })
+  );
 };

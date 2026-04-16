@@ -64,7 +64,7 @@ import { SalesOrder, Client, OrderStatus } from '../../core/models';
                   <td><strong>{{ o.clientName ?? 'Клієнт #' + o.clientId }}</strong></td>
                   <td>{{ o.orderDate | date:'dd.MM.yyyy' }}</td>
                   <td>
-                    <span class="badge" [ngClass]="orderBadge(o.status)">{{ o.status }}</span>
+                    <span class="badge" [ngClass]="orderBadge(o.status)">{{ orderLabel(o.status) }}</span>
                   </td>
                   <td>
                     <span class="badge badge-inactive">{{ o.items.length }} SKU</span>
@@ -170,7 +170,7 @@ export class OrdersComponent implements OnInit {
   edit(o: SalesOrder) {
     this.editing.set(true);
     this.editId = o.orderId;
-    this.form = { clientId: o.clientId, status: o.status, orderDate: o.orderDate?.split('T')[0] ?? '' };
+    this.form = { clientId: o.clientId, status: o.status, orderDate: o.orderDate.split('T')[0] };
     this.showModal.set(true);
   }
 
@@ -189,5 +189,9 @@ export class OrdersComponent implements OnInit {
 
   orderBadge(s: OrderStatus): string {
     return { New:'badge-new', Reserved:'badge-reserved', Shipped:'badge-shipped', Paid:'badge-paid' }[s] ?? 'badge-inactive';
+  }
+
+  orderLabel(s: OrderStatus): string {
+    return { New:'Нове', Reserved:'Зарезервовано', Shipped:'Відправлено', Paid:'Оплачено' }[s] ?? s;
   }
 }

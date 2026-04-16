@@ -65,12 +65,22 @@ export class AuthService {
       const raw = localStorage.getItem(USER_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as AuthResponse;
+
       // Перевірка мінімальних полів — якщо формат застарілий, чистимо
       if (!parsed?.token || (!parsed.role && !parsed.roles?.length)) {
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem(TOKEN_KEY);
         return null;
       }
+
+      // ★ Перевірка терміну дії токена
+      if (parsed.expiresAt && new Date(parsed.expiresAt) <= new Date()) {
+        console.info('[AuthService] Token expired — clearing session');
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(TOKEN_KEY);
+        return null;
+      }
+
       // Нормалізуємо role якщо стара версія
       if (!parsed.role && parsed.roles?.length) {
         parsed.role = parsed.roles[0];

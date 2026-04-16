@@ -331,7 +331,5 @@ export class BeerStylesComponent implements OnInit {
     return colors[closest];
   }
 
-  srmColor(srm: number): string {
-    return this.srmToHex(Math.round(srm));
-  }
 }
+

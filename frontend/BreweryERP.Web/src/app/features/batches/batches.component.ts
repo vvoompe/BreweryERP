@@ -76,7 +76,7 @@ import { Batch, BatchStatus, Recipe } from '../../core/models';
                   <td><strong>{{ b.recipeName ?? 'Рецепт #' + b.recipeId }}</strong></td>
                   <td>{{ b.startDate | date:'dd.MM.yyyy' }}</td>
                   <td>
-                    <span class="badge" [ngClass]="batchBadge(b.status)">{{ b.status }}</span>
+                    <span class="badge" [ngClass]="batchBadge(b.status)">{{ batchLabel(b.status) }}</span>
                   </td>
                   <td>
                     @if (b.actualAbv) { <span class="font-mono text-amber">{{ b.actualAbv }}%</span> }
@@ -230,7 +230,7 @@ export class BatchesComponent implements OnInit {
   edit(b: Batch) {
     this.editing.set(true);
     this.editId = b.batchId;
-    this.form = { recipeId: b.recipeId, status: b.status, startDate: b.startDate?.split('T')[0] ?? '', actualAbv: b.actualAbv ?? undefined, actualSrm: b.actualSrm ?? undefined };
+    this.form = { recipeId: b.recipeId, status: b.status, startDate: b.startDate.split('T')[0], actualAbv: b.actualAbv ?? undefined, actualSrm: b.actualSrm ?? undefined };
     this.showModal.set(true);
   }
 
@@ -249,5 +249,9 @@ export class BatchesComponent implements OnInit {
 
   batchBadge(s: BatchStatus): string {
     return { Brewing:'badge-brewing', Fermenting:'badge-fermenting', Completed:'badge-completed', Failed:'badge-failed' }[s] ?? 'badge-inactive';
+  }
+
+  batchLabel(s: BatchStatus): string {
+    return { Brewing:'Бродіння', Fermenting:'Ферментація', Completed:'Завершено', Failed:'Невдала' }[s] ?? s;
   }
 }

@@ -12,19 +12,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
     // ──────────────────────────────────────────────
     // DbSet-и — по одному на кожну таблицю
+    // EF Core ініціалізує їх через reflection, тому 'required' усуває CS8618
     // ──────────────────────────────────────────────
-    public DbSet<BeerStyle> BeerStyles { get; set; }
-    public DbSet<Ingredient> Ingredients { get; set; }
-    public DbSet<Supplier> Suppliers { get; set; }
-    public DbSet<SupplyInvoice> SupplyInvoices { get; set; }
-    public DbSet<InvoiceItem> InvoiceItems { get; set; }
-    public DbSet<Recipe> Recipes { get; set; }
-    public DbSet<RecipeItem> RecipeItems { get; set; }
-    public DbSet<Batch> Batches { get; set; }
-    public DbSet<ProductSku> ProductSkus { get; set; }
-    public DbSet<Client> Clients { get; set; }
-    public DbSet<SalesOrder> SalesOrders { get; set; }
-    public DbSet<OrderItem> OrderItems { get; set; }
+    public required DbSet<BeerStyle> BeerStyles { get; set; }
+    public required DbSet<Ingredient> Ingredients { get; set; }
+    public required DbSet<Supplier> Suppliers { get; set; }
+    public required DbSet<SupplyInvoice> SupplyInvoices { get; set; }
+    public required DbSet<InvoiceItem> InvoiceItems { get; set; }
+    public required DbSet<Recipe> Recipes { get; set; }
+    public required DbSet<RecipeItem> RecipeItems { get; set; }
+    public required DbSet<Batch> Batches { get; set; }
+    public required DbSet<ProductSku> ProductSkus { get; set; }
+    public required DbSet<Client> Clients { get; set; }
+    public required DbSet<SalesOrder> SalesOrders { get; set; }
+    public required DbSet<OrderItem> OrderItems { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options) { }

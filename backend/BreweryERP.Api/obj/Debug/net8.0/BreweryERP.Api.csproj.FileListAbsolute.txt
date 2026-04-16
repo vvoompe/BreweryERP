@@ -118,3 +118,4 @@ C:\Users\alexm\.gemini\antigravity\scratch\BreweryERP\backend\BreweryERP.Api\obj
 C:\Users\alexm\.gemini\antigravity\scratch\BreweryERP\backend\BreweryERP.Api\obj\Debug\net8.0\BreweryERP.Api.pdb
 C:\Users\alexm\.gemini\antigravity\scratch\BreweryERP\backend\BreweryERP.Api\obj\Debug\net8.0\BreweryERP.Api.genruntimeconfig.cache
 C:\Users\alexm\.gemini\antigravity\scratch\BreweryERP\backend\BreweryERP.Api\obj\Debug\net8.0\ref\BreweryERP.Api.dll
+C:\Users\alexm\.gemini\antigravity\scratch\BreweryERP\backend\BreweryERP.Api\obj\Debug\net8.0\BreweryERP.Api.sourcelink.json
