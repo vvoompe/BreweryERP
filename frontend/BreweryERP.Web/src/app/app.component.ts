@@ -27,6 +27,7 @@ export class AppComponent {
     { path: '/orders',      label: 'Замовлення',     icon: '🛒' },
     { path: '/clients',     label: 'Клієнти',        icon: '👥' },
     { path: '/suppliers',   label: 'Постачальники',  icon: '🏭' },
+    { path: '/import',      label: 'Імпорт Excel',   icon: '📥' },
     { path: '/staff',       label: 'Персонал',       icon: '👤' },
   ];
 

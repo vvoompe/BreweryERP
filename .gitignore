@@ -1,1 +1,42 @@
-/ng_new.log
+# ── .NET ──────────────────────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+.vs/
+*.log
+*.tmp
+
+# NuGet
+*.nupkg
+.nuget/
+packages/
+
+# Publish output
+publish/
+out/
+
+# User secrets
+appsettings.Development.json
+appsettings.Local.json
+
+# ── Node / Angular ─────────────────────────────────────────────────────────────
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# ── Збірки / кеш ──────────────────────────────────────────────────────────────
+ng_new.log
+*.cache

@@ -151,3 +151,78 @@ export interface DashboardStats {
   totalRecipes:       number;
   activeRecipes:      number;
 }
+
+// ---------- Excel Import ----------
+
+export interface ColumnInfo {
+  index:  number;
+  letter: string;
+  header: string | null;
+}
+
+export interface DetectedMapping {
+  colName:        number; // 0 = not found
+  colType:        number;
+  colQuantity:    number;
+  colUnit:        number;
+  colExpiration:  number;
+  colUnitPrice:   number;
+}
+
+export interface ExcelRowPreview {
+  rowNumber:      number;
+  ingredientName: string;
+  ingredientType: string;
+  quantity:       number;
+  unit:           string;
+  expirationDate: string | null;
+  unitPrice:      number | null;
+  isNew:          boolean;
+  ingredientId:   number | null;
+  error:          string | null;
+}
+
+export interface ExcelPreviewDto {
+  rows:             ExcelRowPreview[];
+  validCount:       number;
+  errorCount:       number;
+  globalErrors:     string[];
+  columns:          ColumnInfo[];          // ← колонки файлу
+  suggestedMapping: DetectedMapping | null;// ← авто-визначений mapping
+}
+
+export interface ExcelRowCommit {
+  ingredientName: string;
+  ingredientType: string;
+  quantity:       number;
+  unit:           string;
+  unitPrice:      number | null;
+  expirationDate: string | null;
+  ingredientId:   number | null;
+}
+
+export interface ExcelImportRequest {
+  supplierId:  number;
+  docNumber:   string;
+  receiveDate: string | null;
+  rows:        ExcelRowCommit[];
+}
+
+export interface ImportResultDto {
+  invoiceId:      number;
+  docNumber:      string;
+  importedRows:   number;
+  newIngredients: number;
+  message:        string;
+}
+
+export interface ImportLog {
+  importId:   number;
+  fileName:   string;
+  importedAt: string;
+  importedBy: string;
+  invoiceId:  number | null;
+  status:     string;
+  error:      string | null;
+  rowCount:   number;
+}

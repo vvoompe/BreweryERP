@@ -26,6 +26,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public required DbSet<Client> Clients { get; set; }
     public required DbSet<SalesOrder> SalesOrders { get; set; }
     public required DbSet<OrderItem> OrderItems { get; set; }
+    public required DbSet<ImportLog> ImportLogs { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options) { }
@@ -135,6 +136,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .HasColumnName("quantity")
              .HasColumnType("decimal(10,3)")
              .IsRequired();
+            e.Property(x => x.UnitPrice)
+             .HasColumnName("unit_price")
+             .HasColumnType("decimal(10,2)");
             e.Property(x => x.ExpirationDate).HasColumnName("expiration_date");
 
             // FK → Ingredient (без Cascade, щоб не видаляти сировину разом з рядком)
@@ -316,6 +320,27 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .WithMany(s => s.OrderItems)
              .HasForeignKey(x => x.SkuId)
              .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── ImportLog ─────────────────────────────────────────────────
+        modelBuilder.Entity<ImportLog>(e =>
+        {
+            e.ToTable("import_logs");
+            e.HasKey(x => x.ImportId);
+            e.Property(x => x.ImportId).HasColumnName("import_id").ValueGeneratedOnAdd();
+            e.Property(x => x.FileName  ).HasColumnName("file_name"  ).HasMaxLength(255).IsRequired();
+            e.Property(x => x.ImportedAt).HasColumnName("imported_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            e.Property(x => x.ImportedBy).HasColumnName("imported_by").HasMaxLength(255).IsRequired();
+            e.Property(x => x.InvoiceId ).HasColumnName("invoice_id");
+            e.Property(x => x.Status    ).HasColumnName("status"    ).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Error     ).HasColumnName("error");
+            e.Property(x => x.RowCount  ).HasColumnName("row_count");
+
+            // FK → SupplyInvoice (nullable — може бути null якщо імпорт провалився)
+            e.HasOne(x => x.Invoice)
+             .WithMany()
+             .HasForeignKey(x => x.InvoiceId)
+             .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

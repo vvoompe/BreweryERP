@@ -1,6 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule }              from '@angular/common';
 import { FormsModule }               from '@angular/forms';
+import { RouterLink }                from '@angular/router';
 import { Observable }                from 'rxjs';
 import { ApiService }                from '../../core/api.service';
 import { Ingredient, IngredientType } from '../../core/models';
@@ -8,7 +9,7 @@ import { Ingredient, IngredientType } from '../../core/models';
 @Component({
   selector: 'app-inventory',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="animate-in">
       <div class="page-header flex-between">
@@ -16,9 +17,14 @@ import { Ingredient, IngredientType } from '../../core/models';
           <h2>🌾 Інгредієнти</h2>
           <p>Склад сировини та контроль запасів</p>
         </div>
-        <button class="btn btn-primary" id="btn-add-ingredient" (click)="openAdd()">
-          ＋ Додати інгредієнт
-        </button>
+        <div style="display:flex; gap:10px;">
+          <a routerLink="/import" class="btn btn-ghost" id="btn-goto-import">
+            📥 Імпортувати з Excel
+          </a>
+          <button class="btn btn-primary" id="btn-add-ingredient" (click)="openAdd()">
+            ＋ Додати інгредієнт
+          </button>
+        </div>
       </div>
 
       <div class="search-bar">

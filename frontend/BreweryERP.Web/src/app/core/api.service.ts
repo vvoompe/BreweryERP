@@ -5,7 +5,9 @@ import { Observable } from 'rxjs';
 import {
   BeerStyle, Ingredient, Supplier, SupplyInvoice,
   Recipe, Batch, ProductSku, Client, SalesOrder,
-  StaffDto, AuthResponse, RegisterRequest
+  StaffDto, AuthResponse, RegisterRequest,
+  ExcelPreviewDto, ExcelImportRequest, ImportLog,
+  ImportResultDto
 } from './models';
 
 // ─── Змінити якщо backend запущений на іншому порту ─────────────────────────
@@ -75,4 +77,32 @@ export class ApiService {
   updateStaffRole(id: string, role: string): Observable<void>         { return this.http.put<void>(`${BASE}/users/${id}/role`, { role }); }
   toggleStaffLock(id: string):              Observable<void>          { return this.http.put<void>(`${BASE}/users/${id}/lock`, {}); }
   deleteStaff(id: string):                  Observable<void>          { return this.http.delete<void>(`${BASE}/users/${id}`); }
+
+  // ── Excel Import ───────────────────────────────────────────────────────────
+  importPreview(
+    file: File,
+    dataStartRow = 2,
+    colName  = 0, colType  = 0, colQty   = 0,
+    colUnit  = 0, colExp   = 0, colPrice = 0
+  ): Observable<ExcelPreviewDto> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const params = new URLSearchParams({
+      dataStartRow: String(dataStartRow),
+      colName:  String(colName),  colType:  String(colType),
+      colQty:   String(colQty),   colUnit:  String(colUnit),
+      colExp:   String(colExp),   colPrice: String(colPrice)
+    });
+    return this.http.post<ExcelPreviewDto>(`${BASE}/import/preview?${params}`, fd);
+  }
+  importCommit(req: ExcelImportRequest, fileName: string): Observable<ImportResultDto> {
+    return this.http.post<ImportResultDto>(
+      `${BASE}/import/commit?fileName=${encodeURIComponent(fileName)}`, req);
+  }
+  importTemplate(): Observable<Blob> {
+    return this.http.get(`${BASE}/import/template`, { responseType: 'blob' });
+  }
+  getImportLogs(): Observable<ImportLog[]> {
+    return this.http.get<ImportLog[]>(`${BASE}/import/logs`);
+  }
 }

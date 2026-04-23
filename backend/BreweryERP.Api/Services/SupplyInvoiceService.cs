@@ -95,6 +95,7 @@ public class SupplyInvoiceService : ISupplyInvoiceService
                     InvoiceId      = invoice.InvoiceId,
                     IngredientId   = itemReq.IngredientId,
                     Quantity       = itemReq.Quantity,
+                    UnitPrice      = itemReq.UnitPrice,
                     ExpirationDate = itemReq.ExpirationDate
                 };
                 _db.InvoiceItems.Add(item);
@@ -114,17 +115,19 @@ public class SupplyInvoiceService : ISupplyInvoiceService
         }
     }
 
-    // ── DELETE ────────────────────────────────────────────────────────────────
+    // ── DELETE (★ відкат TotalStock) ──────────────────────────────────
     public async Task DeleteAsync(int id)
     {
         var invoice = await _db.SupplyInvoices
             .Include(i => i.Items)
+                .ThenInclude(ii => ii.Ingredient)
             .FirstOrDefaultAsync(i => i.InvoiceId == id)
             ?? throw new KeyNotFoundException($"Invoice {id} not found.");
 
-        // Примітка: ON DELETE CASCADE для Items налаштовано у Fluent API,
-        // але тут явно завантажуємо Items щоб EF відстежив зворотне оновлення TotalStock.
-        // У production варто розглянути окремий "сторно"-ендпоінт.
+        // ★ Бізнес-логіка: віднімаємо залишок — TotalStock -= Quantity
+        foreach (var item in invoice.Items)
+            item.Ingredient.TotalStock -= item.Quantity;
+
         _db.SupplyInvoices.Remove(invoice);
         await _db.SaveChangesAsync();
     }
@@ -140,6 +143,7 @@ public class SupplyInvoiceService : ISupplyInvoiceService
             ii.IngredientId,
             ii.Ingredient.Name,
             ii.Quantity,
+            ii.UnitPrice,
             ii.Ingredient.Unit,
             ii.ExpirationDate)).ToList());
 }

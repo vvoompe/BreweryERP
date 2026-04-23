@@ -8,6 +8,7 @@ namespace BreweryERP.Api.DTOs.SupplyInvoices;
 public record InvoiceItemRequest(
     int       IngredientId,
     decimal   Quantity,
+    decimal?  UnitPrice,
     DateOnly? ExpirationDate);
 
 /// <summary>
@@ -26,6 +27,7 @@ public record InvoiceItemDto(
     int       IngredientId,
     string    IngredientName,
     decimal   Quantity,
+    decimal?  UnitPrice,
     string    Unit,
     DateOnly? ExpirationDate);
 

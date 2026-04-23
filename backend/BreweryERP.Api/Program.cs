@@ -83,6 +83,7 @@ builder.Services.AddScoped<ISupplyInvoiceService, SupplyInvoiceService>();
 builder.Services.AddScoped<IRecipeService,        RecipeService>();
 builder.Services.AddScoped<IBatchService,         BatchService>();
 builder.Services.AddScoped<ISalesOrderService,    SalesOrderService>();
+builder.Services.AddScoped<IExcelImportService,   ExcelImportService>();
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CORS — дозволяємо Angular dev server

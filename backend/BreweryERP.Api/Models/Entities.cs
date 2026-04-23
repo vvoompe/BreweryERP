@@ -111,6 +111,7 @@ public class InvoiceItem
     public int      InvoiceId      { get; set; }
     public int      IngredientId   { get; set; }
     public decimal  Quantity       { get; set; }
+    public decimal? UnitPrice      { get; set; }  // ціна за одиницю (необов'.язкова)
     public DateOnly? ExpirationDate { get; set; }
 
     // Navigation
@@ -222,4 +223,26 @@ public class OrderItem
     // Navigation
     public SalesOrder Order      { get; set; } = null!;
     public ProductSku ProductSku { get; set; } = null!;
+}
+// ──────────────────────────────────────────────────────────────────────────────
+// БЛОК 5: ЖУРНАЛ ІМПОРТУ Excel
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Журнал завантажень Excel-файлів з накладними.
+/// Створюється автоматично при кожному імпорті.
+/// </summary>
+public class ImportLog
+{
+    public int      ImportId   { get; set; }
+    public string   FileName   { get; set; } = string.Empty;
+    public DateTime ImportedAt { get; set; } = DateTime.UtcNow;
+    public string   ImportedBy { get; set; } = string.Empty; // email користувача
+    public int?     InvoiceId  { get; set; }                 // null якщо імпорт провалився
+    public string   Status     { get; set; } = string.Empty; // "Success" | "Failed"
+    public string?  Error      { get; set; }
+    public int      RowCount   { get; set; }
+
+    // Navigation
+    public SupplyInvoice? Invoice { get; set; }
 }

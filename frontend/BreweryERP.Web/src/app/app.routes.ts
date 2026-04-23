@@ -74,5 +74,12 @@ export const routes: Routes = [
       import('./features/beer-styles/beer-styles.component').then(m => m.BeerStylesComponent)
   },
 
+  {
+    path: 'import',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/excel-import/excel-import.component').then(m => m.ExcelImportComponent)
+  },
+
   { path: '**', redirectTo: 'dashboard' }
 ];
