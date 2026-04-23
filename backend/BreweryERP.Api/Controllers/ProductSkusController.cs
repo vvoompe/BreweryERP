@@ -27,7 +27,7 @@ public class ProductSkusController : ControllerBase
         var list = await query
             .OrderByDescending(s => s.SkuId)
             .Select(s => new ProductSkuDto(
-                s.SkuId, s.BatchId, s.PackagingType.ToString(), s.Price, s.QuantityInStock))
+                s.SkuId, s.BatchId, s.PackagingType.ToString(), s.Price, s.UnitCost, s.QuantityInStock))
             .ToListAsync();
         return Ok(list);
     }
@@ -40,7 +40,7 @@ public class ProductSkusController : ControllerBase
     {
         var s = await _db.ProductSkus.AsNoTracking().FirstOrDefaultAsync(x => x.SkuId == id);
         return s is null ? NotFound()
-            : Ok(new ProductSkuDto(s.SkuId, s.BatchId, s.PackagingType.ToString(), s.Price, s.QuantityInStock));
+            : Ok(new ProductSkuDto(s.SkuId, s.BatchId, s.PackagingType.ToString(), s.Price, s.UnitCost, s.QuantityInStock));
     }
 
     /// <summary>Додати SKU до готової партії (Admin, Brewer).</summary>
@@ -49,21 +49,31 @@ public class ProductSkusController : ControllerBase
     [ProducesResponseType(typeof(ProductSkuDto), 201)]
     public async Task<IActionResult> Create([FromBody] CreateProductSkuRequest request)
     {
-        var batchExists = await _db.Batches.AnyAsync(b => b.BatchId == request.BatchId);
-        if (!batchExists) return NotFound(new { message = $"Batch {request.BatchId} not found." });
+        var batch = await _db.Batches.FirstOrDefaultAsync(b => b.BatchId == request.BatchId);
+        if (batch is null) return NotFound(new { message = $"Batch {request.BatchId} not found." });
+
+        decimal volumeLiters = request.PackagingType switch {
+            PackagingType.Keg_50L => 50m,
+            PackagingType.Keg_30L => 30m,
+            PackagingType.Bottle_0_5L => 0.5m,
+            _ => 1m
+        };
+        // Базовий об'єм варіння - 500Л. Собівартість SKU = (об'єм SKU / 500) * загальну собівартість партії.
+        decimal unitCost = batch.EstimatedCost * (volumeLiters / 500m);
 
         var sku = new ProductSku
         {
             BatchId         = request.BatchId,
             PackagingType   = request.PackagingType,
             Price           = request.Price,
+            UnitCost        = Math.Round(unitCost, 2),
             QuantityInStock = request.QuantityInStock
         };
         _db.ProductSkus.Add(sku);
         await _db.SaveChangesAsync();
 
         var dto = new ProductSkuDto(sku.SkuId, sku.BatchId,
-                                    sku.PackagingType.ToString(), sku.Price, sku.QuantityInStock);
+                                    sku.PackagingType.ToString(), sku.Price, sku.UnitCost, sku.QuantityInStock);
         return CreatedAtAction(nameof(GetById), new { id = sku.SkuId }, dto);
     }
 
@@ -81,6 +91,6 @@ public class ProductSkusController : ControllerBase
         sku.QuantityInStock = request.QuantityInStock;
         await _db.SaveChangesAsync();
         return Ok(new ProductSkuDto(sku.SkuId, sku.BatchId,
-                                    sku.PackagingType.ToString(), sku.Price, sku.QuantityInStock));
+                                    sku.PackagingType.ToString(), sku.Price, sku.UnitCost, sku.QuantityInStock));
     }
 }

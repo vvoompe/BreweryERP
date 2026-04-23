@@ -1,0 +1,12 @@
+DESCRIBE beer_styles;
+DESCRIBE ingredients;
+DESCRIBE suppliers;
+DESCRIBE recipes;
+DESCRIBE batches;
+DESCRIBE product_skus;
+DESCRIBE clients;
+DESCRIBE sales_orders;
+DESCRIBE order_items;
+DESCRIBE supply_invoices;
+DESCRIBE invoice_items;
+DESCRIBE recipe_items;

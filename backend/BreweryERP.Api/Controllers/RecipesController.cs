@@ -25,6 +25,11 @@ public class RecipesController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] bool activeOnly = false)
         => Ok(await _service.GetAllAsync(activeOnly));
 
+    [AllowAnonymous]
+    [HttpGet("test")]
+    public async Task<IActionResult> TestGetAll()
+        => Ok(await _service.GetAllAsync(false));
+
     /// <summary>Рецепт з повним складом інгредієнтів.</summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(RecipeDto), 200)]

@@ -68,51 +68,57 @@ public class SupplyInvoiceService : ISupplyInvoiceService
         if (notFound.Count > 0)
             throw new KeyNotFoundException($"Ingredients not found: {string.Join(", ", notFound)}");
 
-        // ════ ТРАНЗАКЦІЯ: атомарне збереження Master + Details ════
-        await using var tx = await _db.Database.BeginTransactionAsync();
-        try
+        // ════ ТРАНЗАКЦІЯ (через ExecutionStrategy — сумісно з EnableRetryOnFailure) ════
+        SupplyInvoiceDto? created = null;
+        await _db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            // 1. Створення Master-документа
-            var invoice = new SupplyInvoice
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                SupplierId  = request.SupplierId,
-                DocNumber   = request.DocNumber,
-                ReceiveDate = request.ReceiveDate ?? DateTime.UtcNow
-            };
-            _db.SupplyInvoices.Add(invoice);
-            await _db.SaveChangesAsync(); // Отримуємо InvoiceId
-
-            // 2. Додавання Detail-рядків + збільшення TotalStock (роль Warehouse)
-            foreach (var itemReq in request.Items)
-            {
-                var ingredient = ingredients[itemReq.IngredientId];
-
-                // ★ Бізнес-логіка: TotalStock += Quantity
-                ingredient.TotalStock += itemReq.Quantity;
-
-                var item = new InvoiceItem
+                // 1. Створення Master-документа
+                var invoice = new SupplyInvoice
                 {
-                    InvoiceId      = invoice.InvoiceId,
-                    IngredientId   = itemReq.IngredientId,
-                    Quantity       = itemReq.Quantity,
-                    UnitPrice      = itemReq.UnitPrice,
-                    ExpirationDate = itemReq.ExpirationDate
+                    SupplierId  = request.SupplierId,
+                    DocNumber   = request.DocNumber,
+                    ReceiveDate = request.ReceiveDate ?? DateTime.UtcNow
                 };
-                _db.InvoiceItems.Add(item);
+                _db.SupplyInvoices.Add(invoice);
+                await _db.SaveChangesAsync(); // Отримуємо InvoiceId
+
+                // 2. Додавання Detail-рядків + збільшення TotalStock (роль Warehouse)
+                foreach (var itemReq in request.Items)
+                {
+                    var ingredient = ingredients[itemReq.IngredientId];
+
+                    // ★ Бізнес-логіка: TotalStock += Quantity
+                    ingredient.TotalStock += itemReq.Quantity;
+
+                    var item = new InvoiceItem
+                    {
+                        InvoiceId      = invoice.InvoiceId,
+                        IngredientId   = itemReq.IngredientId,
+                        Quantity       = itemReq.Quantity,
+                        UnitPrice      = itemReq.UnitPrice,
+                        ExpirationDate = itemReq.ExpirationDate
+                    };
+                    _db.InvoiceItems.Add(item);
+                }
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                // Повертаємо повний DTO з навігаційними властивостями
+                created = await GetByIdAsync(invoice.InvoiceId)
+                    ?? throw new InvalidOperationException("Failed to reload invoice after creation.");
             }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
 
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            // Повертаємо повний DTO з навігаційними властивостями
-            return await GetByIdAsync(invoice.InvoiceId)
-                ?? throw new InvalidOperationException("Failed to reload invoice after creation.");
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+        return created!;
     }
 
     // ── DELETE (★ відкат TotalStock) ──────────────────────────────────

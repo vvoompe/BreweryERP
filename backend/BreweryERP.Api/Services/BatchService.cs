@@ -33,7 +33,8 @@ public class BatchService : IBatchService
                 b.Status.ToString(),
                 b.StartDate,
                 b.ActualAbv,
-                b.ActualSrm))
+                b.ActualSrm,
+                b.EstimatedCost))
             .ToListAsync();
     }
 
@@ -80,45 +81,65 @@ public class BatchService : IBatchService
                 "Insufficient stock for the following ingredients:\n" +
                 string.Join("\n", shortages));
 
-        // ════ ТРАНЗАКЦІЯ ════
-        await using var tx = await _db.Database.BeginTransactionAsync();
-        try
+        // ════ ТРАНЗАКЦІЯ (через ExecutionStrategy — сумісно з EnableRetryOnFailure) ════
+        BatchDto? batchResult = null;
+        List<BatchStockWriteoffDto>? writeoffsResult = null;
+
+        await _db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            // 1. Створення запису Batch
-            var batch = new Batch
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                RecipeId  = recipe.RecipeId,
-                Status    = BatchStatus.Brewing,
-                StartDate = DateTime.UtcNow
-            };
-            _db.Batches.Add(batch);
-            await _db.SaveChangesAsync(); // Отримуємо BatchId
+                // Розрахунок собівартості партії
+                var estimatedCost = recipe.Items.Sum(ri => ri.Amount * ri.Ingredient.AverageCost);
 
-            // 2. ★ Бізнес-логіка: TotalStock -= Amount для кожного інгредієнта
-            var writeoffs = new List<BatchStockWriteoffDto>();
-            foreach (var recipeItem in recipe.Items)
-            {
-                var ingredient = recipeItem.Ingredient;
-                ingredient.TotalStock -= recipeItem.Amount;
+                // 1. Створення запису Batch
+                var batch = new Batch
+                {
+                    RecipeId  = recipe.RecipeId,
+                    Status    = BatchStatus.Brewing,
+                    StartDate = DateTime.UtcNow,
+                    EstimatedCost = estimatedCost
+                };
+                _db.Batches.Add(batch);
+                await _db.SaveChangesAsync(); // Отримуємо BatchId
 
-                writeoffs.Add(new BatchStockWriteoffDto(
-                    ingredient.IngredientId,
-                    ingredient.Name,
-                    recipeItem.Amount,
-                    ingredient.TotalStock));
+                // 2. ★ Бізнес-логіка: TotalStock -= Amount для кожного інгредієнта
+                var writeoffs = new List<BatchStockWriteoffDto>();
+                foreach (var recipeItem in recipe.Items)
+                {
+                    var ingredient = recipeItem.Ingredient;
+                    ingredient.TotalStock -= recipeItem.Amount;
+
+                    writeoffs.Add(new BatchStockWriteoffDto(
+                        ingredient.IngredientId,
+                        ingredient.Name,
+                        recipeItem.Amount,
+                        ingredient.TotalStock));
+                }
+
+                _db.ActivityLogs.Add(new ActivityLog {
+                    Action = "Batch Started",
+                    EntityName = "Batch",
+                    EntityId = batch.BatchId,
+                    Details = $"Started brewing Recipe #{recipe.RecipeId}",
+                    UserName = "System"
+                });
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                batchResult    = MapToDto(batch, recipe);
+                writeoffsResult = writeoffs;
             }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
 
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            var batchDto = MapToDto(batch, recipe);
-            return (batchDto, writeoffs);
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+        return (batchResult!, writeoffsResult!);
     }
 
     // ── UPDATE STATUS ─────────────────────────────────────────────────────────
@@ -148,6 +169,14 @@ public class BatchService : IBatchService
         batch.ActualAbv = request.ActualAbv ?? batch.ActualAbv;
         batch.ActualSrm = request.ActualSrm ?? batch.ActualSrm;
 
+        _db.ActivityLogs.Add(new ActivityLog {
+            Action = "Batch Status Changed",
+            EntityName = "Batch",
+            EntityId = batch.BatchId,
+            Details = $"Status changed to {request.Status}",
+            UserName = "System"
+        });
+
         await _db.SaveChangesAsync();
         return MapToDto(batch);
     }
@@ -157,11 +186,11 @@ public class BatchService : IBatchService
         b.BatchId, b.RecipeId,
         b.Recipe.VersionName, b.Recipe.Style.Name,
         b.Status.ToString(), b.StartDate,
-        b.ActualAbv, b.ActualSrm);
+        b.ActualAbv, b.ActualSrm, b.EstimatedCost);
 
     private static BatchDto MapToDto(Batch b, Recipe recipe) => new(
         b.BatchId, b.RecipeId,
         recipe.VersionName, recipe.Style.Name,
         b.Status.ToString(), b.StartDate,
-        b.ActualAbv, b.ActualSrm);
+        b.ActualAbv, b.ActualSrm, b.EstimatedCost);
 }

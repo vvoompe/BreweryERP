@@ -35,12 +35,14 @@ public class RecipeService : IRecipeService
         return await query
             .OrderByDescending(r => r.IsActive)
             .ThenBy(r => r.StyleId)
-            .Select(r => new RecipeListDto(
-                r.RecipeId,
-                r.Style.Name,
-                r.VersionName,
-                r.IsActive,
-                r.Items.Count))
+            .Select(r => new RecipeListDto
+            {
+                RecipeId = r.RecipeId,
+                StyleName = r.Style.Name,
+                VersionName = r.VersionName,
+                IsActive = r.IsActive,
+                ItemCount = r.Items.Count
+            })
             .ToListAsync();
     }
 

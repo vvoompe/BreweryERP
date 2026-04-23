@@ -22,7 +22,8 @@ public record BatchDto(
     string   Status,
     DateTime StartDate,
     decimal? ActualAbv,
-    int?     ActualSrm);
+    int?     ActualSrm,
+    decimal  EstimatedCost);
 
 public record BatchStockWriteoffDto(
     int     IngredientId,

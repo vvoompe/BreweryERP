@@ -134,109 +134,121 @@ public class ExcelImportService : IExcelImportService
         await _db.SaveChangesAsync();
 
         int newIngredients = 0;
+        SupplyInvoiceDto? invoiceDtoResult = null;
+        ImportResultDto?  importResult     = null;
 
         try
         {
-            // ★ FIX: вся операція — одна транзакція
-            await using var tx = await _db.Database.BeginTransactionAsync();
-
-            var itemRequests = new List<InvoiceItemRequest>();
-
-            foreach (var row in request.Rows)
+            // Вся операція — одна транзакція через ExecutionStrategy (сумісно з EnableRetryOnFailure)
+            await _db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
             {
-                int ingredientId;
-                if (row.IngredientId.HasValue)
+                await using var tx = await _db.Database.BeginTransactionAsync();
+                try
                 {
-                    ingredientId = row.IngredientId.Value;
-                }
-                else
-                {
-                    // ★ FIX: ToLowerInvariant для консистентності
-                    var existing = await _db.Ingredients
-                        .FirstOrDefaultAsync(i =>
-                            i.Name.ToLower() == row.IngredientName.ToLowerInvariant());
+                    var itemRequests = new List<InvoiceItemRequest>();
+                    newIngredients = 0;
 
-                    if (existing is not null)
+                    foreach (var row in request.Rows)
                     {
-                        ingredientId = existing.IngredientId;
-                    }
-                    else
-                    {
-                        if (!Enum.TryParse<IngredientType>(row.IngredientType, true, out var ingType))
-                            ingType = IngredientType.Additive;
-
-                        var newIng = new Ingredient
+                        int ingredientId;
+                        if (row.IngredientId.HasValue)
                         {
-                            Name       = row.IngredientName,
-                            Type       = ingType,
-                            Unit       = row.Unit,
-                            TotalStock = 0
-                        };
-                        _db.Ingredients.Add(newIng);
-                        await _db.SaveChangesAsync();
-                        ingredientId = newIng.IngredientId;
-                        newIngredients++;
+                            ingredientId = row.IngredientId.Value;
+                        }
+                        else
+                        {
+                            var existing = await _db.Ingredients
+                                .FirstOrDefaultAsync(i =>
+                                    i.Name.ToLower() == row.IngredientName.ToLowerInvariant());
+
+                            if (existing is not null)
+                            {
+                                ingredientId = existing.IngredientId;
+                            }
+                            else
+                            {
+                                if (!Enum.TryParse<IngredientType>(row.IngredientType, true, out var ingType))
+                                    ingType = IngredientType.Additive;
+
+                                var newIng = new Ingredient
+                                {
+                                    Name       = row.IngredientName,
+                                    Type       = ingType,
+                                    Unit       = row.Unit,
+                                    TotalStock = 0
+                                };
+                                _db.Ingredients.Add(newIng);
+                                await _db.SaveChangesAsync();
+                                ingredientId = newIng.IngredientId;
+                                newIngredients++;
+                            }
+                        }
+
+                        itemRequests.Add(new InvoiceItemRequest(
+                            ingredientId, row.Quantity, row.UnitPrice, row.ExpirationDate));
                     }
+
+                    // Перевіряємо постачальника
+                    var supplierExists = await _db.Suppliers.AnyAsync(s => s.SupplierId == request.SupplierId);
+                    if (!supplierExists)
+                        throw new KeyNotFoundException($"Постачальника з ID {request.SupplierId} не знайдено.");
+
+                    // Створюємо накладну
+                    var invoice = new SupplyInvoice
+                    {
+                        SupplierId  = request.SupplierId,
+                        DocNumber   = request.DocNumber,
+                        ReceiveDate = request.ReceiveDate ?? DateTime.UtcNow
+                    };
+                    _db.SupplyInvoices.Add(invoice);
+                    await _db.SaveChangesAsync();
+
+                    var ingredients = await _db.Ingredients
+                        .Where(i => itemRequests.Select(ir => ir.IngredientId).Contains(i.IngredientId))
+                        .ToDictionaryAsync(i => i.IngredientId);
+
+                    foreach (var ir in itemRequests)
+                    {
+                        var ingredient = ingredients[ir.IngredientId];
+                        ingredient.TotalStock += ir.Quantity; // ★ TotalStock update
+
+                        _db.InvoiceItems.Add(new InvoiceItem
+                        {
+                            InvoiceId      = invoice.InvoiceId,
+                            IngredientId   = ir.IngredientId,
+                            Quantity       = ir.Quantity,
+                            UnitPrice      = ir.UnitPrice,
+                            ExpirationDate = ir.ExpirationDate
+                        });
+                    }
+
+                    await _db.SaveChangesAsync();
+                    await tx.CommitAsync();
+
+                    // Перезавантажуємо для маппінгу DTO
+                    invoiceDtoResult = await _invoiceService.GetByIdAsync(invoice.InvoiceId)
+                        ?? throw new InvalidOperationException("Не вдалося перезавантажити накладну після збереження.");
+
+                    log.Status    = "Success";
+                    log.InvoiceId = invoice.InvoiceId;
+                    await _db.SaveChangesAsync();
+
+                    importResult = new ImportResultDto(
+                        invoice.InvoiceId,
+                        invoice.DocNumber,
+                        itemRequests.Count,
+                        newIngredients,
+                        $"Успішно імпортовано {itemRequests.Count} позицій" +
+                        (newIngredients > 0 ? $", створено {newIngredients} нових інгредієнтів" : ""));
                 }
-
-                itemRequests.Add(new InvoiceItemRequest(
-                    ingredientId, row.Quantity, row.UnitPrice, row.ExpirationDate));
-            }
-
-            // Перевіряємо постачальника перед CreateAsync
-            var supplierExists = await _db.Suppliers.AnyAsync(s => s.SupplierId == request.SupplierId);
-            if (!supplierExists)
-                throw new KeyNotFoundException($"Постачальника з ID {request.SupplierId} не знайдено.");
-
-            // Створюємо накладну напряму (без транзакції всередині — ми вже в транзакції)
-            var invoice = new SupplyInvoice
-            {
-                SupplierId  = request.SupplierId,
-                DocNumber   = request.DocNumber,
-                ReceiveDate = request.ReceiveDate ?? DateTime.UtcNow
-            };
-            _db.SupplyInvoices.Add(invoice);
-            await _db.SaveChangesAsync();
-
-            var ingredients = await _db.Ingredients
-                .Where(i => itemRequests.Select(ir => ir.IngredientId).Contains(i.IngredientId))
-                .ToDictionaryAsync(i => i.IngredientId);
-
-            foreach (var ir in itemRequests)
-            {
-                var ingredient = ingredients[ir.IngredientId];
-                ingredient.TotalStock += ir.Quantity; // ★ TotalStock update
-
-                _db.InvoiceItems.Add(new InvoiceItem
+                catch
                 {
-                    InvoiceId      = invoice.InvoiceId,
-                    IngredientId   = ir.IngredientId,
-                    Quantity       = ir.Quantity,
-                    UnitPrice      = ir.UnitPrice,
-                    ExpirationDate = ir.ExpirationDate
-                });
-            }
+                    await tx.RollbackAsync();
+                    throw;
+                }
+            });
 
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            // Перезавантажуємо для маппінгу DTO
-            var invoiceDto = await _invoiceService.GetByIdAsync(invoice.InvoiceId)
-                ?? throw new InvalidOperationException("Не вдалося перезавантажити накладну після збереження.");
-
-            log.Status    = "Success";
-            log.InvoiceId = invoice.InvoiceId;
-            await _db.SaveChangesAsync();
-
-            var result = new ImportResultDto(
-                invoice.InvoiceId,
-                invoice.DocNumber,
-                itemRequests.Count,
-                newIngredients,
-                $"Успішно імпортовано {itemRequests.Count} позицій" +
-                (newIngredients > 0 ? $", створено {newIngredients} нових інгредієнтів" : ""));
-
-            return (invoiceDto, result);
+            return (invoiceDtoResult!, importResult!);
         }
         catch (Exception ex)
         {

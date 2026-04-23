@@ -34,9 +34,11 @@ public record RecipeDto(
     bool                 IsActive,
     IList<RecipeItemDto> Items);
 
-public record RecipeListDto(
-    int    RecipeId,
-    string StyleName,
-    string VersionName,
-    bool   IsActive,
-    int    ItemCount);
+public record RecipeListDto
+{
+    public int    RecipeId    { get; init; }
+    public string StyleName   { get; init; } = string.Empty;
+    public string VersionName { get; init; } = string.Empty;
+    public bool   IsActive    { get; init; }
+    public int    ItemCount   { get; init; }
+}

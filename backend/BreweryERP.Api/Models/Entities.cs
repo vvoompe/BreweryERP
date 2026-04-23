@@ -69,6 +69,7 @@ public class Ingredient
     public IngredientType Type         { get; set; }
     public decimal        TotalStock   { get; set; }
     public string         Unit         { get; set; } = "kg";
+    public decimal        AverageCost  { get; set; } // ★ NEW: Середня вартість за одиницю
 
     // Navigation (зворотні зв'язки для проміжних таблиць)
     public ICollection<InvoiceItem> InvoiceItems { get; set; } = [];
@@ -163,6 +164,7 @@ public class Batch
     public DateTime    StartDate { get; set; }
     public decimal?    ActualAbv { get; set; }
     public int?        ActualSrm { get; set; }
+    public decimal     EstimatedCost { get; set; } // ★ NEW: Собівартість партії
 
     // Navigation
     public Recipe                   Recipe      { get; set; } = null!;
@@ -179,6 +181,7 @@ public class ProductSku
     public int           BatchId         { get; set; }
     public PackagingType PackagingType   { get; set; }
     public decimal       Price           { get; set; }
+    public decimal       UnitCost        { get; set; } // ★ NEW: Собівартість за 1 шт
     public int           QuantityInStock { get; set; }
 
     // Navigation
@@ -245,4 +248,19 @@ public class ImportLog
 
     // Navigation
     public SupplyInvoice? Invoice { get; set; }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// БЛОК 6: ЖУРНАЛ АКТИВНОСТІ
+// ──────────────────────────────────────────────────────────────────────────────
+
+public class ActivityLog
+{
+    public int      LogId      { get; set; }
+    public string   Action     { get; set; } = string.Empty;
+    public string   EntityName { get; set; } = string.Empty;
+    public int      EntityId   { get; set; }
+    public string?  Details    { get; set; }
+    public DateTime Timestamp  { get; set; } = DateTime.UtcNow;
+    public string   UserName   { get; set; } = string.Empty;
 }

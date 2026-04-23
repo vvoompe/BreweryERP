@@ -7,7 +7,7 @@ import {
   Recipe, Batch, ProductSku, Client, SalesOrder,
   StaffDto, AuthResponse, RegisterRequest,
   ExcelPreviewDto, ExcelImportRequest, ImportLog,
-  ImportResultDto
+  ImportResultDto, CreateSalesOrderRequest
 } from './models';
 
 // ─── Змінити якщо backend запущений на іншому порту ─────────────────────────
@@ -59,6 +59,11 @@ export class ApiService {
   updateSku(id: number, s: Partial<ProductSku>): Observable<void> { return this.http.put<void>(`${BASE}/productskus/${id}`, s); }
   deleteSku(id: number):          Observable<void>         { return this.http.delete<void>(`${BASE}/productskus/${id}`); }
 
+  // ── Activity Logs ──────────────────────────────────────────────────────────
+  getActivityLogs(count: number = 20): Observable<any[]> {
+    return this.http.get<any[]>(`${BASE}/activitylogs?count=${count}`);
+  }
+
   // ── Clients ────────────────────────────────────────────────────────────────
   getClients():                   Observable<Client[]>     { return this.http.get<Client[]>(`${BASE}/clients`); }
   createClient(c: Partial<Client>): Observable<Client>     { return this.http.post<Client>(`${BASE}/clients`, c); }
@@ -66,10 +71,10 @@ export class ApiService {
   deleteClient(id: number):       Observable<void>         { return this.http.delete<void>(`${BASE}/clients/${id}`); }
 
   // ── SalesOrders ────────────────────────────────────────────────────────────
-  getOrders():                    Observable<SalesOrder[]> { return this.http.get<SalesOrder[]>(`${BASE}/salesorders`); }
-  createOrder(o: Partial<SalesOrder>): Observable<SalesOrder> { return this.http.post<SalesOrder>(`${BASE}/salesorders`, o); }
-  updateOrder(id: number, o: Partial<SalesOrder>): Observable<void> { return this.http.put<void>(`${BASE}/salesorders/${id}`, o); }
-  deleteOrder(id: number):        Observable<void>         { return this.http.delete<void>(`${BASE}/salesorders/${id}`); }
+  getOrders():                                Observable<SalesOrder[]>  { return this.http.get<SalesOrder[]>(`${BASE}/salesorders`); }
+  getOrder(id: number):                       Observable<SalesOrder>    { return this.http.get<SalesOrder>(`${BASE}/salesorders/${id}`); }
+  createOrder(o: CreateSalesOrderRequest):        Observable<SalesOrder>    { return this.http.post<SalesOrder>(`${BASE}/salesorders`, o); }
+  updateOrderStatus(id: number, status: string): Observable<void>       { return this.http.patch<void>(`${BASE}/salesorders/${id}/status`, { status }); }
 
   // ── Staff / Users (Admin only) ─────────────────────────────────────────────
   getStaff():                                Observable<StaffDto[]>   { return this.http.get<StaffDto[]>(`${BASE}/users`); }

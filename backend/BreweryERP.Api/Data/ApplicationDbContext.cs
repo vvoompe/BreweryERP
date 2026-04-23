@@ -27,6 +27,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public required DbSet<SalesOrder> SalesOrders { get; set; }
     public required DbSet<OrderItem> OrderItems { get; set; }
     public required DbSet<ImportLog> ImportLogs { get; set; }
+    public required DbSet<ActivityLog> ActivityLogs { get; set; }
 
     [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -342,6 +343,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .WithMany()
              .HasForeignKey(x => x.InvoiceId)
              .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ── ActivityLog ───────────────────────────────────────────────
+        modelBuilder.Entity<ActivityLog>(e =>
+        {
+            e.ToTable("activity_logs");
+            e.HasKey(x => x.LogId);
+            e.Property(x => x.LogId).HasColumnName("log_id").ValueGeneratedOnAdd();
+            e.Property(x => x.Action).HasColumnName("action").HasMaxLength(255).IsRequired();
+            e.Property(x => x.EntityName).HasColumnName("entity_name").HasMaxLength(100).IsRequired();
+            e.Property(x => x.EntityId).HasColumnName("entity_id").IsRequired();
+            e.Property(x => x.Details).HasColumnName("details");
+            e.Property(x => x.Timestamp).HasColumnName("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
+            e.Property(x => x.UserName).HasColumnName("user_name").HasMaxLength(100).IsRequired();
         });
     }
 }

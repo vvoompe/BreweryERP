@@ -5,6 +5,9 @@ import { ApiService }                from '../../core/api.service';
 import { AuthService }               from '../../core/auth.service';
 import { DashboardStats }            from '../../core/models';
 import { forkJoin }                  from 'rxjs';
+import { Chart, registerables }      from 'chart.js';
+
+Chart.register(...registerables);
 
 @Component({
   selector: 'app-dashboard',
@@ -62,6 +65,22 @@ import { forkJoin }                  from 'rxjs';
             <div class="stat-label">Рецепти</div>
             <div class="stat-value">{{ stats().totalRecipes }}</div>
             <div class="stat-sub">{{ stats().activeRecipes }} активних</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="dashboard-panels" style="margin-bottom: var(--space-md);">
+          <div class="card panel-card" style="padding: var(--space-md);">
+            <h3 style="margin-bottom: 1rem; font-size: 1rem;">📈 Динаміка продажів (останні 7 днів)</h3>
+            <div style="position: relative; height: 260px; width: 100%;">
+              <canvas id="salesChart"></canvas>
+            </div>
+          </div>
+          <div class="card panel-card" style="padding: var(--space-md);">
+            <h3 style="margin-bottom: 1rem; font-size: 1rem;">🌾 Розподіл сировини</h3>
+            <div style="position: relative; height: 260px; width: 100%; display: flex; justify-content: center;">
+              <canvas id="inventoryChart"></canvas>
+            </div>
           </div>
         </div>
 
@@ -137,7 +156,36 @@ import { forkJoin }                  from 'rxjs';
               </div>
             }
           </div>
+        </div>
 
+        <!-- Activity Log -->
+        <div class="dashboard-panels" style="margin-top: var(--space-md);">
+          <!-- Recent Activity -->
+          <div class="card panel-card" style="grid-column: span 2;">
+            <div class="panel-header flex-between">
+              <h3>⏱ Журнал активності (Live)</h3>
+            </div>
+            @if (activities().length === 0) {
+              <div class="empty-state" style="padding: 24px;">
+                <p>Немає нових подій</p>
+              </div>
+            }
+            <div style="max-height: 400px; overflow-y: auto;">
+              @for (a of activities(); track a.logId) {
+                <div class="panel-row" style="border-left: 4px solid var(--accent);">
+                  <div style="width: 100%;">
+                    <div class="flex-between">
+                      <span class="panel-row-title" style="color: var(--text-color);">{{ a.action }}</span>
+                      <span class="panel-row-sub">{{ a.timestamp | date:'short' }}</span>
+                    </div>
+                    <div class="panel-row-sub" style="margin-top: 4px;">{{ a.details }}</div>
+                    <div class="panel-row-sub" style="margin-top: 4px; font-weight: 600;">👤 {{ a.userName }}</div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+          
         </div>
       }
     </div>
@@ -182,6 +230,10 @@ export class DashboardComponent implements OnInit {
   recentBatches  = signal<any[]>([]);
   recentOrders   = signal<any[]>([]);
   lowStockIngredients = signal<any[]>([]);
+  activities     = signal<any[]>([]);
+
+  private salesChart: any;
+  private inventoryChart: any;
 
   constructor(private api: ApiService, public auth: AuthService) {}
 
@@ -197,9 +249,10 @@ export class DashboardComponent implements OnInit {
       batches:     this.api.getBatches(),
       orders:      this.api.getOrders(),
       ingredients: this.api.getIngredients(),
-      recipes:     this.api.getRecipes()
+      recipes:     this.api.getRecipes(),
+      activities:  this.api.getActivityLogs(10)
     }).subscribe({
-      next: ({ batches, orders, ingredients, recipes }) => {
+      next: ({ batches, orders, ingredients, recipes, activities }) => {
         this.stats.set({
           totalBatches:     batches.length,
           activeBatches:    batches.filter(b => b.status === 'Brewing' || b.status === 'Fermenting').length,
@@ -213,7 +266,11 @@ export class DashboardComponent implements OnInit {
         this.recentBatches.set(batches.slice(-5).reverse());
         this.recentOrders.set(orders.slice(-5).reverse());
         this.lowStockIngredients.set(ingredients.filter(i => i.totalStock < 10));
+        this.activities.set(activities);
         this.loading.set(false);
+
+        // Ініціалізуємо графіки з невеликою затримкою, щоб Angular встиг відрендерити canvas
+        setTimeout(() => this.initCharts(orders, ingredients), 100);
       },
       error: () => this.loading.set(false)
     });
@@ -227,5 +284,76 @@ export class DashboardComponent implements OnInit {
   orderBadge(status: string): string {
     const map: Record<string,string> = { New:'badge-new', Reserved:'badge-reserved', Shipped:'badge-shipped', Paid:'badge-paid' };
     return map[status] ?? 'badge-inactive';
+  }
+
+  initCharts(orders: any[], ingredients: any[]) {
+    // 1. Динаміка продажів
+    if (this.salesChart) this.salesChart.destroy();
+    
+    // Групуємо замовлення за останні 7 днів
+    const dates = [...Array(7)].map((_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      return d.toISOString().split('T')[0];
+    }).reverse();
+
+    const salesData = dates.map(date => {
+      return orders.filter(o => o.orderDate.startsWith(date))
+                   .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    });
+
+    const ctxSales = document.getElementById('salesChart') as HTMLCanvasElement;
+    if (ctxSales) {
+      this.salesChart = new Chart(ctxSales, {
+        type: 'bar',
+        data: {
+          labels: dates.map(d => d.substring(5).replace('-', '.')), // 'MM.DD'
+          datasets: [{
+            label: 'Виторг (₴)',
+            data: salesData,
+            backgroundColor: 'rgba(234, 179, 8, 0.7)',
+            borderColor: 'rgba(234, 179, 8, 1)',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { grid: { display: false } } },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    // 2. Розподіл сировини
+    if (this.inventoryChart) this.inventoryChart.destroy();
+
+    const groupedIngr = ingredients.reduce((acc, i) => {
+      acc[i.type] = (acc[i.type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const ctxInv = document.getElementById('inventoryChart') as HTMLCanvasElement;
+    if (ctxInv) {
+      this.inventoryChart = new Chart(ctxInv, {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(groupedIngr),
+          datasets: [{
+            data: Object.values(groupedIngr),
+            backgroundColor: ['#eab308', '#22c55e', '#3b82f6', '#ec4899', '#94a3b8'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 } } }
+          },
+          cutout: '70%'
+        }
+      });
+    }
   }
 }

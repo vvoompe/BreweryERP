@@ -124,20 +124,36 @@ export interface Client {
 
 // ---------- SalesOrder ----------
 export interface OrderItemDto {
-  skuId:         number;
-  skuInfo?:      string;
-  quantity:      number;
-  priceAtMoment: number;
+  skuId:          number;
+  beerName?:      string;
+  packagingType?: string;
+  quantity:       number;
+  priceAtMoment:  number;
+  lineTotal?:     number;
+}
+
+export interface CreateOrderItemRequest {
+  skuId: number;
+  quantity: number;
+}
+
+export interface CreateSalesOrderRequest {
+  clientId: number;
+  items: CreateOrderItemRequest[];
 }
 
 export interface SalesOrder {
-  orderId:   number;
-  clientId:  number;
-  clientName?: string;
-  orderDate: string;
-  status:    OrderStatus;
-  items:     OrderItemDto[];
-  totalAmount?: number;
+  orderId:             number;
+  clientId:            number;
+  clientName?:         string;
+  orderDate:           string;
+  status:              OrderStatus;
+  totalAmount?:        number;
+  totalCost?:          number;
+  profitMargin?:       number;
+  profitMarginPercent?: number;
+  itemCount?:          number;
+  items?:              OrderItemDto[];
 }
 
 // ---------- Dashboard stats (computed on frontend) ----------

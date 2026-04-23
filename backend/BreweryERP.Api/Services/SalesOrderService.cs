@@ -29,6 +29,7 @@ public class SalesOrderService : ISalesOrderService
                 o.OrderDate,
                 o.Status.ToString(),
                 o.Items.Sum(i => i.Quantity * i.PriceAtMoment),
+                o.Items.Sum(i => i.Quantity * i.PriceAtMoment) - o.Items.Sum(i => i.Quantity * i.ProductSku.UnitCost),
                 o.Items.Count))
             .ToListAsync();
     }
@@ -41,6 +42,9 @@ public class SalesOrderService : ISalesOrderService
             .Include(o => o.Client)
             .Include(o => o.Items)
                 .ThenInclude(i => i.ProductSku)
+                    .ThenInclude(sku => sku.Batch)
+                        .ThenInclude(b => b.Recipe)
+                            .ThenInclude(r => r.Style)
             .FirstOrDefaultAsync(o => o.OrderId == id);
 
         return order is null ? null : MapToDto(order);
@@ -78,48 +82,62 @@ public class SalesOrderService : ISalesOrderService
             throw new InvalidOperationException(
                 "Insufficient stock:\n" + string.Join("\n", stockErrors));
 
-        // ════ ТРАНЗАКЦІЯ ════
-        await using var tx = await _db.Database.BeginTransactionAsync();
-        try
+        // ════ ТРАНЗАКЦІЯ (через ExecutionStrategy — сумісно з EnableRetryOnFailure) ════
+        SalesOrderDto? created = null;
+        await _db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            // 1. Створення Master-замовлення
-            var order = new SalesOrder
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                ClientId  = request.ClientId,
-                OrderDate = DateTime.UtcNow,
-                Status    = OrderStatus.New
-            };
-            _db.SalesOrders.Add(order);
-            await _db.SaveChangesAsync(); // Отримуємо OrderId
-
-            // 2. Додавання Detail-рядків + фіксація ціни (PriceAtMoment)
-            foreach (var itemReq in request.Items)
-            {
-                var sku = skus[itemReq.SkuId];
-
-                _db.OrderItems.Add(new OrderItem
+                // 1. Створення Master-замовлення
+                var order = new SalesOrder
                 {
-                    OrderId       = order.OrderId,
-                    SkuId         = itemReq.SkuId,
-                    Quantity      = itemReq.Quantity,
-                    PriceAtMoment = sku.Price   // ★ Фіксуємо поточну ціну
+                    ClientId  = request.ClientId,
+                    OrderDate = DateTime.UtcNow,
+                    Status    = OrderStatus.New
+                };
+                _db.SalesOrders.Add(order);
+                await _db.SaveChangesAsync(); // Отримуємо OrderId
+
+                // 2. Додавання Detail-рядків + фіксація ціни (PriceAtMoment)
+                foreach (var itemReq in request.Items)
+                {
+                    var sku = skus[itemReq.SkuId];
+
+                    _db.OrderItems.Add(new OrderItem
+                    {
+                        OrderId       = order.OrderId,
+                        SkuId         = itemReq.SkuId,
+                        Quantity      = itemReq.Quantity,
+                        PriceAtMoment = sku.Price   // ★ Фіксуємо поточну ціну
+                    });
+
+                    // Резервуємо кількість при статусі New
+                    // (повне списання — при переході в Shipped)
+                }
+
+                _db.ActivityLogs.Add(new ActivityLog {
+                    Action = "Order Created",
+                    EntityName = "SalesOrder",
+                    EntityId = order.OrderId,
+                    Details = $"Created order for Client #{request.ClientId} with {request.Items.Count} items",
+                    UserName = "System"
                 });
 
-                // Резервуємо кількість при статусі New
-                // (повне списання — при переході в Shipped)
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                created = await GetByIdAsync(order.OrderId)
+                    ?? throw new InvalidOperationException("Failed to reload order.");
             }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
 
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            return await GetByIdAsync(order.OrderId)
-                ?? throw new InvalidOperationException("Failed to reload order.");
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+        return created!;
     }
 
     // ── UPDATE STATUS ─────────────────────────────────────────────────────────
@@ -129,6 +147,9 @@ public class SalesOrderService : ISalesOrderService
             .Include(o => o.Client)
             .Include(o => o.Items)
                 .ThenInclude(i => i.ProductSku)
+                    .ThenInclude(sku => sku.Batch)
+                        .ThenInclude(b => b.Recipe)
+                            .ThenInclude(r => r.Style)
             .FirstOrDefaultAsync(o => o.OrderId == orderId)
             ?? throw new KeyNotFoundException($"Order {orderId} not found.");
 
@@ -160,23 +181,46 @@ public class SalesOrderService : ISalesOrderService
         }
 
         order.Status = request.Status;
+
+        _db.ActivityLogs.Add(new ActivityLog {
+            Action = "Order Status Changed",
+            EntityName = "SalesOrder",
+            EntityId = order.OrderId,
+            Details = $"Status changed to {request.Status}",
+            UserName = "System"
+        });
+
         await _db.SaveChangesAsync();
 
         return MapToDto(order);
     }
 
     // ── MAPPING ───────────────────────────────────────────────────────────────
-    private static SalesOrderDto MapToDto(SalesOrder o) => new(
-        o.OrderId,
-        o.ClientId,
-        o.Client.Name,
-        o.OrderDate,
-        o.Status.ToString(),
-        o.Items.Sum(i => i.Quantity * i.PriceAtMoment),
-        o.Items.Select(i => new OrderItemDto(
-            i.SkuId,
-            i.ProductSku.PackagingType.ToString(),
-            i.Quantity,
-            i.PriceAtMoment,
-            i.Quantity * i.PriceAtMoment)).ToList());
+    private static SalesOrderDto MapToDto(SalesOrder o)
+    {
+        var totalAmount = o.Items.Sum(i => i.Quantity * i.PriceAtMoment);
+        var totalCost   = o.Items.Sum(i => i.Quantity * i.ProductSku.UnitCost);
+        var margin      = totalAmount - totalCost;
+        var marginPct   = totalAmount > 0 ? (margin / totalAmount) * 100 : 0;
+
+        return new SalesOrderDto(
+            o.OrderId,
+            o.ClientId,
+            o.Client.Name,
+            o.OrderDate,
+            o.Status.ToString(),
+            totalAmount,
+            totalCost,
+            margin,
+            Math.Round(marginPct, 2),
+            o.Items.Select(i => new OrderItemDto(
+                i.SkuId,
+                i.ProductSku?.Batch?.Recipe?.Style != null 
+                    ? $"{i.ProductSku.Batch.Recipe.Style.Name} ({i.ProductSku.Batch.Recipe.VersionName})" 
+                    : $"SKU #{i.SkuId}",
+                i.ProductSku?.PackagingType.ToString() ?? "",
+                i.Quantity,
+                i.PriceAtMoment,
+                i.Quantity * i.PriceAtMoment)).ToList());
+    }
 }

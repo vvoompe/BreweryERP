@@ -20,6 +20,7 @@ public record UpdateOrderStatusRequest(OrderStatus Status);
 
 public record OrderItemDto(
     int     SkuId,
+    string  BeerName,
     string  PackagingType,
     int     Quantity,
     decimal PriceAtMoment,
@@ -32,6 +33,9 @@ public record SalesOrderDto(
     DateTime            OrderDate,
     string              Status,
     decimal             TotalAmount,
+    decimal             TotalCost,
+    decimal             ProfitMargin,
+    decimal             ProfitMarginPercent,
     IList<OrderItemDto> Items);
 
 public record SalesOrderListDto(
@@ -40,6 +44,7 @@ public record SalesOrderListDto(
     DateTime OrderDate,
     string   Status,
     decimal  TotalAmount,
+    decimal  ProfitMargin,
     int      ItemCount);
 
 // ── Clients ───────────────────────────────────────────────────────────────────
@@ -55,6 +60,7 @@ public record ProductSkuDto(
     int     BatchId,
     string  PackagingType,
     decimal Price,
+    decimal UnitCost,
     int     QuantityInStock);
 
 public record CreateProductSkuRequest(

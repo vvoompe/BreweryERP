@@ -73,7 +73,7 @@ import { Recipe, BeerStyle }         from '../../core/models';
                   </td>
                   <td>{{ r.styleName ?? 'Стиль #' + r.styleId }}</td>
                   <td>
-                    <span class="badge badge-inactive">{{ r.items.length }} інгр.</span>
+                    <span class="badge badge-inactive">{{ r.items ? r.items.length : $any(r).itemCount }} інгр.</span>
                   </td>
                   <td>
                     <span class="badge" [class.badge-active]="r.isActive" [class.badge-inactive]="!r.isActive">
