@@ -28,6 +28,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public required DbSet<OrderItem> OrderItems { get; set; }
     public required DbSet<ImportLog> ImportLogs { get; set; }
 
+    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options) { }
 

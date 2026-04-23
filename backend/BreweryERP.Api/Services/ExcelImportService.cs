@@ -10,12 +10,7 @@ namespace BreweryERP.Api.Services;
 
 /// <summary>
 /// Сервіс імпорту накладних з Excel (.xlsx) та CSV.
-/// Підтримує:
-///   - авто-детекцію колонок за назвами заголовків
-///   - ручне налаштування mapping (colName, colType, ...)
-///   - вибір рядка початку даних (dataStartRow)
-///   - авто-визначення роздільника CSV (кома / крапка з комою / TAB)
-///   - авто-BOM detection для UTF-8
+/// Чиста логіка парсингу делегується в <see cref="ImportParser"/>.
 /// </summary>
 public class ExcelImportService : IExcelImportService
 {
@@ -44,7 +39,6 @@ public class ExcelImportService : IExcelImportService
     {
         var globalErrors = new List<string>();
 
-        // 1. Читаємо сирі рядки
         RawFileData raw;
         try
         {
@@ -64,9 +58,8 @@ public class ExcelImportService : IExcelImportService
             return new ExcelPreviewDto([], 0, 0, globalErrors, raw.Columns, null);
         }
 
-        // 2. Авто-визначення mapping (якщо user не задав кастомний)
-        var suggested = AutoDetect(raw.Headers);
-        var mapping   = ResolveMapping(suggested, colName, colType, colQty, colUnit, colExp, colPrice);
+        var suggested = ImportParser.AutoDetect(raw.Headers);
+        var mapping   = ImportParser.ResolveMapping(suggested, colName, colType, colQty, colUnit, colExp, colPrice);
 
         if (mapping.ColName == 0 || mapping.ColType == 0 ||
             mapping.ColQty  == 0 || mapping.ColUnit == 0)
@@ -77,12 +70,10 @@ public class ExcelImportService : IExcelImportService
             return new ExcelPreviewDto([], 0, 0, globalErrors, raw.Columns, suggested);
         }
 
-        // 3. Завантажуємо існуючі інгредієнти для матчингу
         var allIngredients = await _db.Ingredients
             .AsNoTracking()
-            .ToDictionaryAsync(i => i.Name.ToLowerInvariant());
+            .ToDictionaryAsync(i => i.Name.ToLowerInvariant()); // ★ FIX: ToLowerInvariant
 
-        // 4. Парсимо рядки
         var rows = new List<ExcelRowPreview>();
         foreach (var (rowNum, cells) in raw.AllRows)
         {
@@ -97,10 +88,10 @@ public class ExcelImportService : IExcelImportService
 
             if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(qtyStr)) continue;
 
-            var rowError = ValidateRow(name, typStr, qtyStr, unit, expStr, priceStr,
+            var rowError = ImportParser.ValidateRow(name, typStr, qtyStr, unit, expStr, priceStr,
                 out var qty, out _, out var expDate, out var price);
 
-            allIngredients.TryGetValue(name.ToLowerInvariant(), out var existing);
+            allIngredients.TryGetValue(name.ToLowerInvariant(), out var existing); // ★ FIX
 
             rows.Add(new ExcelRowPreview(
                 RowNumber:       rowNum,
@@ -124,6 +115,10 @@ public class ExcelImportService : IExcelImportService
     // COMMIT IMPORT
     // ══════════════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// ★ FIX: тепер ingredient auto-creation та invoice creation виконуються
+    /// в одній транзакції, щоб уникнути orphaned ingredients при помилці.
+    /// </summary>
     public async Task<(SupplyInvoiceDto Invoice, ImportResultDto Result)> CommitImportAsync(
         ExcelImportRequest request, string userEmail, string fileName)
     {
@@ -142,6 +137,9 @@ public class ExcelImportService : IExcelImportService
 
         try
         {
+            // ★ FIX: вся операція — одна транзакція
+            await using var tx = await _db.Database.BeginTransactionAsync();
+
             var itemRequests = new List<InvoiceItemRequest>();
 
             foreach (var row in request.Rows)
@@ -153,8 +151,10 @@ public class ExcelImportService : IExcelImportService
                 }
                 else
                 {
+                    // ★ FIX: ToLowerInvariant для консистентності
                     var existing = await _db.Ingredients
-                        .FirstOrDefaultAsync(i => i.Name.ToLower() == row.IngredientName.ToLower());
+                        .FirstOrDefaultAsync(i =>
+                            i.Name.ToLower() == row.IngredientName.ToLowerInvariant());
 
                     if (existing is not null)
                     {
@@ -183,10 +183,46 @@ public class ExcelImportService : IExcelImportService
                     ingredientId, row.Quantity, row.UnitPrice, row.ExpirationDate));
             }
 
-            var createRequest = new CreateSupplyInvoiceRequest(
-                request.SupplierId, request.DocNumber, request.ReceiveDate, itemRequests);
+            // Перевіряємо постачальника перед CreateAsync
+            var supplierExists = await _db.Suppliers.AnyAsync(s => s.SupplierId == request.SupplierId);
+            if (!supplierExists)
+                throw new KeyNotFoundException($"Постачальника з ID {request.SupplierId} не знайдено.");
 
-            var invoice = await _invoiceService.CreateAsync(createRequest);
+            // Створюємо накладну напряму (без транзакції всередині — ми вже в транзакції)
+            var invoice = new SupplyInvoice
+            {
+                SupplierId  = request.SupplierId,
+                DocNumber   = request.DocNumber,
+                ReceiveDate = request.ReceiveDate ?? DateTime.UtcNow
+            };
+            _db.SupplyInvoices.Add(invoice);
+            await _db.SaveChangesAsync();
+
+            var ingredients = await _db.Ingredients
+                .Where(i => itemRequests.Select(ir => ir.IngredientId).Contains(i.IngredientId))
+                .ToDictionaryAsync(i => i.IngredientId);
+
+            foreach (var ir in itemRequests)
+            {
+                var ingredient = ingredients[ir.IngredientId];
+                ingredient.TotalStock += ir.Quantity; // ★ TotalStock update
+
+                _db.InvoiceItems.Add(new InvoiceItem
+                {
+                    InvoiceId      = invoice.InvoiceId,
+                    IngredientId   = ir.IngredientId,
+                    Quantity       = ir.Quantity,
+                    UnitPrice      = ir.UnitPrice,
+                    ExpirationDate = ir.ExpirationDate
+                });
+            }
+
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            // Перезавантажуємо для маппінгу DTO
+            var invoiceDto = await _invoiceService.GetByIdAsync(invoice.InvoiceId)
+                ?? throw new InvalidOperationException("Не вдалося перезавантажити накладну після збереження.");
 
             log.Status    = "Success";
             log.InvoiceId = invoice.InvoiceId;
@@ -195,12 +231,12 @@ public class ExcelImportService : IExcelImportService
             var result = new ImportResultDto(
                 invoice.InvoiceId,
                 invoice.DocNumber,
-                invoice.Items.Count,
+                itemRequests.Count,
                 newIngredients,
-                $"Успішно імпортовано {invoice.Items.Count} позицій" +
+                $"Успішно імпортовано {itemRequests.Count} позицій" +
                 (newIngredients > 0 ? $", створено {newIngredients} нових інгредієнтів" : ""));
 
-            return (invoice, result);
+            return (invoiceDto, result);
         }
         catch (Exception ex)
         {
@@ -283,14 +319,13 @@ public class ExcelImportService : IExcelImportService
     // ══════════════════════════════════════════════════════════════════════════
 
     private record RawFileData(
-        IList<ColumnInfo>           Columns,
-        string?[]                   Headers,
-        IList<(int RowNum, string[] Cells)> AllRows);
+        IList<ColumnInfo>                    Columns,
+        string?[]                            Headers,
+        IList<(int RowNum, string[] Cells)>  AllRows);
 
     private static bool IsExcel(string fileName) =>
         Path.GetExtension(fileName).Equals(".xlsx", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Читає xlsx — повертає header і data rows.</summary>
     private static RawFileData ReadExcel(IFormFile file, int dataStartRow)
     {
         using var stream = file.OpenReadStream();
@@ -302,21 +337,18 @@ public class ExcelImportService : IExcelImportService
         int lastCol = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
         int lastRow = ws.LastRowUsed()?.RowNumber()       ?? 0;
 
-        // Заголовки з рядка 1
         var headers = Enumerable.Range(1, lastCol)
             .Select(c => (string?)ws.Cell(1, c).GetString().Trim())
             .ToArray();
 
-        var columns = BuildColumnInfo(headers);
+        var columns = ImportParser.BuildColumnInfo(headers);
 
-        // Дані з dataStartRow
         var rows = new List<(int, string[])>();
         for (int r = dataStartRow; r <= lastRow; r++)
         {
             var cells = Enumerable.Range(1, lastCol)
                 .Select(c => ws.Cell(r, c).GetString().Trim())
                 .ToArray();
-
             if (cells.All(string.IsNullOrWhiteSpace)) continue;
             rows.Add((r, cells));
         }
@@ -324,11 +356,9 @@ public class ExcelImportService : IExcelImportService
         return new RawFileData(columns, headers, rows);
     }
 
-    /// <summary>Читає CSV з авто-детекцією роздільника та BOM.</summary>
     private static RawFileData ReadCsv(IFormFile file, int dataStartRow)
     {
         using var stream = file.OpenReadStream();
-        // Підтримуємо UTF-8 BOM
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 
         var lines = new List<string>();
@@ -341,21 +371,19 @@ public class ExcelImportService : IExcelImportService
         if (lines.Count == 0)
             throw new InvalidOperationException("CSV файл порожній.");
 
-        // Авто-детекція роздільника за першим рядком
-        char delimiter = DetectDelimiter(lines[0]);
+        char delimiter = ImportParser.DetectDelimiter(lines[0]);
 
-        // Рядок заголовків (рядок 1)
-        var headers = ParseCsvLine(lines[0], delimiter)
+        var headers = ImportParser.ParseCsvLine(lines[0], delimiter)
             .Select(h => (string?)h.Trim())
             .ToArray();
 
-        var columns = BuildColumnInfo(headers);
+        var columns = ImportParser.BuildColumnInfo(headers);
 
         var rows = new List<(int, string[])>();
         for (int i = dataStartRow - 1; i < lines.Count; i++)
         {
             if (string.IsNullOrWhiteSpace(lines[i])) continue;
-            var cells = ParseCsvLine(lines[i], delimiter)
+            var cells = ImportParser.ParseCsvLine(lines[i], delimiter)
                 .Select(c => c.Trim())
                 .ToArray();
             if (cells.All(string.IsNullOrWhiteSpace)) continue;
@@ -363,179 +391,5 @@ public class ExcelImportService : IExcelImportService
         }
 
         return new RawFileData(columns, headers, rows);
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // PRIVATE: CSV HELPERS
-    // ══════════════════════════════════════════════════════════════════════════
-
-    private static char DetectDelimiter(string line)
-    {
-        // Вибираємо роздільник за кількістю входжень у першому рядку
-        var candidates = new[] { ',', ';', '\t', '|' };
-        return candidates
-            .OrderByDescending(d => line.Count(c => c == d))
-            .First();
-    }
-
-    private static string[] ParseCsvLine(string line, char delimiter)
-    {
-        var result  = new List<string>();
-        var current = new StringBuilder();
-        bool inQuotes = false;
-
-        for (int i = 0; i < line.Length; i++)
-        {
-            char c = line[i];
-            if (c == '"')
-            {
-                // Подвоєна лапка всередині — escape
-                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
-                {
-                    current.Append('"');
-                    i++;
-                }
-                else
-                {
-                    inQuotes = !inQuotes;
-                }
-            }
-            else if (c == delimiter && !inQuotes)
-            {
-                result.Add(current.ToString());
-                current.Clear();
-            }
-            else
-            {
-                current.Append(c);
-            }
-        }
-
-        result.Add(current.ToString());
-        return result.ToArray();
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // PRIVATE: AUTO-DETECT & MAPPING
-    // ══════════════════════════════════════════════════════════════════════════
-
-    private static IList<ColumnInfo> BuildColumnInfo(string?[] headers)
-    {
-        return headers
-            .Select((h, i) => new ColumnInfo(i + 1, ColLetter(i + 1), h))
-            .ToList();
-    }
-
-    /// <summary>
-    /// Авто-визначення mapping за назвами заголовків (UA + EN, регістронезалежно).
-    /// Повертає 0 для колонок що не знайдені.
-    /// </summary>
-    private static DetectedMapping AutoDetect(string?[] headers)
-    {
-        static bool Matches(string? h, params string[] keywords) =>
-            h is not null && keywords.Any(k => h.Contains(k, StringComparison.OrdinalIgnoreCase));
-
-        int Find(params string[] keywords)
-        {
-            for (int i = 0; i < headers.Length; i++)
-                if (Matches(headers[i], keywords)) return i + 1;
-            return 0;
-        }
-
-        return new DetectedMapping(
-            ColName:       Find("назва", "name", "ingredient", "інгредієнт"),
-            ColType:       Find("тип", "type", "вид", "категорія", "category"),
-            ColQuantity:   Find("кількість", "qty", "quantity", "кіл", "amount"),
-            ColUnit:       Find("одиниця", "unit", "од.", "міра"),
-            ColExpiration: Find("дата", "date", "expir", "закінч", "термін", "строк"),
-            ColUnitPrice:  Find("ціна", "price", "вартість", "cost", "прайс"));
-    }
-
-    /// <summary>Merge авто-detected з user-provided (user-provided має пріоритет).</summary>
-    private static (int ColName, int ColType, int ColQty, int ColUnit, int ColExp, int ColPrice)
-        ResolveMapping(DetectedMapping auto,
-            int colName, int colType, int colQty,
-            int colUnit, int colExp, int colPrice)
-    {
-        int R(int user, int detected) => user > 0 ? user : detected;
-        return (
-            R(colName,  auto.ColName),
-            R(colType,  auto.ColType),
-            R(colQty,   auto.ColQuantity),
-            R(colUnit,  auto.ColUnit),
-            R(colExp,   auto.ColExpiration),
-            R(colPrice, auto.ColUnitPrice));
-    }
-
-    private static string ColLetter(int col)
-    {
-        var s = "";
-        while (col > 0)
-        {
-            int rem = (col - 1) % 26;
-            s = (char)('A' + rem) + s;
-            col = (col - 1) / 26;
-        }
-        return s;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // PRIVATE: ROW VALIDATION
-    // ══════════════════════════════════════════════════════════════════════════
-
-    private static string? ValidateRow(
-        string   name,
-        string   typStr,
-        string   qtyStr,
-        string   unit,
-        string   expStr,
-        string   priceStr,
-        out decimal        qty,
-        out IngredientType ingType,
-        out DateOnly?      expDate,
-        out decimal?       price)
-    {
-        qty     = 0;
-        ingType = IngredientType.Additive;
-        expDate = null;
-        price   = null;
-        var errs = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(name))
-            errs.Add("Відсутня назва інгредієнта");
-
-        if (!Enum.TryParse<IngredientType>(typStr, true, out ingType))
-            errs.Add($"Невідомий тип \"{typStr}\". Допустимо: Malt, Hop, Yeast, Additive, Water");
-
-        if (!decimal.TryParse(qtyStr.Replace(',', '.'),
-                System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out qty) || qty <= 0)
-            errs.Add($"Кількість \"{qtyStr}\" має бути число > 0");
-
-        if (string.IsNullOrWhiteSpace(unit))
-            errs.Add("Відсутня одиниця виміру");
-
-        if (!string.IsNullOrWhiteSpace(expStr))
-        {
-            string[] fmts = ["dd.MM.yyyy", "yyyy-MM-dd", "MM/dd/yyyy", "d.MM.yyyy", "dd/MM/yyyy"];
-            if (!DateOnly.TryParseExact(expStr, fmts,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.None, out var d))
-                errs.Add($"Некоректний формат дати \"{expStr}\"");
-            else
-                expDate = d;
-        }
-
-        if (!string.IsNullOrWhiteSpace(priceStr))
-        {
-            if (!decimal.TryParse(priceStr.Replace(',', '.'),
-                    System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var p) || p < 0)
-                errs.Add($"Ціна \"{priceStr}\" має бути число >= 0");
-            else
-                price = p;
-        }
-
-        return errs.Count > 0 ? string.Join("; ", errs) : null;
     }
 }
