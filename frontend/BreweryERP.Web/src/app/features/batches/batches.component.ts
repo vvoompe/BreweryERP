@@ -141,6 +141,21 @@ import { Batch, BatchStatus, Recipe } from '../../core/models';
             </div>
           </div>
 
+          <!-- ✅ ВИПРАВЛЕННЯ: відображення помилки збереження -->
+          @if (saveError()) {
+            <div style="
+              background: rgba(239,68,68,0.12);
+              border: 1px solid rgba(239,68,68,0.4);
+              border-radius: var(--radius);
+              padding: 10px 14px;
+              color: #f87171;
+              font-size: 0.875rem;
+              margin-bottom: 12px;
+            ">
+              ⚠️ {{ saveError() }}
+            </div>
+          }
+
           <div class="modal-footer">
             <button class="btn btn-ghost" (click)="closeModal()">Скасувати</button>
             <button class="btn btn-primary" id="btn-save-batch" (click)="save()" [disabled]="saving()">
@@ -180,6 +195,7 @@ export class BatchesComponent implements OnInit {
   showModal   = signal(false);
   saving      = signal(false);
   editing     = signal(false);
+  saveError   = signal<string | null>(null); // ← НОВИЙ signal для помилок збереження
   batches     = signal<Batch[]>([]);
   recipes     = signal<Recipe[]>([]);
   filtered    = signal<Batch[]>([]);
@@ -223,12 +239,14 @@ export class BatchesComponent implements OnInit {
 
   openAdd() {
     this.editing.set(false);
+    this.saveError.set(null); // ✅ скидаємо помилку при відкритті
     this.form = { recipeId: this.recipes()[0]?.recipeId ?? 0, status: 'Brewing', startDate: new Date().toISOString().split('T')[0] };
     this.showModal.set(true);
   }
 
   edit(b: Batch) {
     this.editing.set(true);
+    this.saveError.set(null); // ✅ скидаємо помилку при відкритті
     this.editId = b.batchId;
     this.form = { recipeId: b.recipeId, status: b.status, startDate: b.startDate.split('T')[0], actualAbv: b.actualAbv ?? undefined, actualSrm: b.actualSrm ?? undefined };
     this.showModal.set(true);
@@ -236,8 +254,17 @@ export class BatchesComponent implements OnInit {
 
   save() {
     this.saving.set(true);
+    this.saveError.set(null); // скидаємо перед новою спробою
     const obs: Observable<any> = this.editing() ? this.api.updateBatch(this.editId, this.form) : this.api.createBatch(this.form);
-    obs.subscribe({ next: () => { this.saving.set(false); this.closeModal(); this.load(); }, error: () => this.saving.set(false) });
+    obs.subscribe({
+      next: () => { this.saving.set(false); this.closeModal(); this.load(); },
+      // ✅ ВИПРАВЛЕННЯ: показуємо реальну помилку з бекенду замість тихого провалу
+      error: (err) => {
+        this.saving.set(false);
+        const msg = err?.error?.message ?? err?.message ?? 'Невідома помилка. Перевірте консоль.';
+        this.saveError.set(msg);
+      }
+    });
   }
 
   remove(id: number) {

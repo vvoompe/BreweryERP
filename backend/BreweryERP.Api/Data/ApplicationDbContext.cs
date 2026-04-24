@@ -82,6 +82,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .HasColumnName("unit")
              .HasMaxLength(10)
              .HasDefaultValue("kg");
+            e.Property(x => x.AverageCost)       // ★ FIX: був відсутній маппінг — додаємо щоб EF не шукав `AverageCost` замість `average_cost`
+             .HasColumnName("average_cost")
+             .HasColumnType("decimal(10,2)")
+             .HasDefaultValue(0m);
         });
 
         // ══════════════════════════════════════════════════════════════════════
@@ -250,6 +254,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
              .HasColumnName("price")
              .HasColumnType("decimal(10,2)")
              .IsRequired();
+            e.Property(x => x.UnitCost)          // ★ FIX: був відсутній маппінг — EF генерував `p.UnitCost` замість `p.unit_cost`
+             .HasColumnName("unit_cost")
+             .HasColumnType("decimal(10,2)")
+             .HasDefaultValue(0m);
             e.Property(x => x.QuantityInStock)
              .HasColumnName("quantity_in_stock")
              .HasDefaultValue(0);
@@ -330,13 +338,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.ToTable("import_logs");
             e.HasKey(x => x.ImportId);
             e.Property(x => x.ImportId).HasColumnName("import_id").ValueGeneratedOnAdd();
-            e.Property(x => x.FileName  ).HasColumnName("file_name"  ).HasMaxLength(255).IsRequired();
+            e.Property(x => x.FileName).HasColumnName("file_name").HasMaxLength(255).IsRequired();
             e.Property(x => x.ImportedAt).HasColumnName("imported_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
             e.Property(x => x.ImportedBy).HasColumnName("imported_by").HasMaxLength(255).IsRequired();
-            e.Property(x => x.InvoiceId ).HasColumnName("invoice_id");
-            e.Property(x => x.Status    ).HasColumnName("status"    ).HasMaxLength(20).IsRequired();
-            e.Property(x => x.Error     ).HasColumnName("error");
-            e.Property(x => x.RowCount  ).HasColumnName("row_count");
+            e.Property(x => x.InvoiceId).HasColumnName("invoice_id");
+            e.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
+            e.Property(x => x.Error).HasColumnName("error");
+            e.Property(x => x.RowCount).HasColumnName("row_count");
 
             // FK → SupplyInvoice (nullable — може бути null якщо імпорт провалився)
             e.HasOne(x => x.Invoice)

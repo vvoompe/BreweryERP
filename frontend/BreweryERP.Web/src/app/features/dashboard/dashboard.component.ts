@@ -4,7 +4,8 @@ import { RouterLink }                from '@angular/router';
 import { ApiService }                from '../../core/api.service';
 import { AuthService }               from '../../core/auth.service';
 import { DashboardStats }            from '../../core/models';
-import { forkJoin }                  from 'rxjs';
+import { forkJoin, of }              from 'rxjs';
+import { catchError }                from 'rxjs/operators';
 import { Chart, registerables }      from 'chart.js';
 
 Chart.register(...registerables);
@@ -31,6 +32,23 @@ Chart.register(...registerables);
 
       @if (loading()) {
         <div class="loading"><div class="spinner"></div> Завантаження...</div>
+      }
+
+      @if (errorMsg()) {
+        <div class="alert alert-danger" style="
+          background: rgba(239,68,68,0.12);
+          border: 1px solid rgba(239,68,68,0.4);
+          border-radius: var(--radius);
+          padding: 12px 16px;
+          color: #f87171;
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        ">
+          ⚠️ {{ errorMsg() }}
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;" (click)="loadData()">Спробувати знову</button>
+        </div>
       }
 
       @if (!loading()) {
@@ -226,6 +244,7 @@ Chart.register(...registerables);
 })
 export class DashboardComponent implements OnInit {
   loading        = signal(true);
+  errorMsg       = signal<string | null>(null); // ← НОВИЙ signal для помилок
   stats          = signal<DashboardStats>({ totalBatches:0, activeBatches:0, totalOrders:0, pendingOrders:0, totalIngredients:0, lowStockCount:0, totalRecipes:0, activeRecipes:0 });
   recentBatches  = signal<any[]>([]);
   recentOrders   = signal<any[]>([]);
@@ -245,34 +264,45 @@ export class DashboardComponent implements OnInit {
 
   loadData(): void {
     this.loading.set(true);
+    this.errorMsg.set(null); // скидаємо попередню помилку
+
+    // ✅ ВИПРАВЛЕННЯ: кожен запит обгорнутий у catchError — один збій не вбиває весь дашборд
     forkJoin({
-      batches:     this.api.getBatches(),
-      orders:      this.api.getOrders(),
-      ingredients: this.api.getIngredients(),
-      recipes:     this.api.getRecipes(),
-      activities:  this.api.getActivityLogs(10)
+      batches:     this.api.getBatches().pipe(catchError(() => of([]))),
+      orders:      this.api.getOrders().pipe(catchError(() => of([]))),
+      ingredients: this.api.getIngredients().pipe(catchError(() => of([]))),
+      recipes:     this.api.getRecipes().pipe(catchError(() => of([]))),
+      activities:  this.api.getActivityLogs(10).pipe(catchError(() => of([])))
     }).subscribe({
       next: ({ batches, orders, ingredients, recipes, activities }) => {
         this.stats.set({
           totalBatches:     batches.length,
-          activeBatches:    batches.filter(b => b.status === 'Brewing' || b.status === 'Fermenting').length,
+          activeBatches:    batches.filter((b: any) => b.status === 'Brewing' || b.status === 'Fermenting').length,
           totalOrders:      orders.length,
-          pendingOrders:    orders.filter(o => o.status === 'New' || o.status === 'Reserved').length,
+          pendingOrders:    orders.filter((o: any) => o.status === 'New' || o.status === 'Reserved').length,
           totalIngredients: ingredients.length,
-          lowStockCount:    ingredients.filter(i => i.totalStock < 10).length,
+          lowStockCount:    ingredients.filter((i: any) => i.totalStock < 10).length,
           totalRecipes:     recipes.length,
-          activeRecipes:    recipes.filter(r => r.isActive).length,
+          activeRecipes:    recipes.filter((r: any) => r.isActive).length,
         });
         this.recentBatches.set(batches.slice(-5).reverse());
         this.recentOrders.set(orders.slice(-5).reverse());
-        this.lowStockIngredients.set(ingredients.filter(i => i.totalStock < 10));
+        this.lowStockIngredients.set(ingredients.filter((i: any) => i.totalStock < 10));
         this.activities.set(activities);
-        this.loading.set(false);
 
-        // Ініціалізуємо графіки з невеликою затримкою, щоб Angular встиг відрендерити canvas
+        // Якщо всі масиви порожні — можливо бекенд не відповідає, попереджаємо
+        if (batches.length === 0 && orders.length === 0 && ingredients.length === 0) {
+          this.errorMsg.set('Не вдалося завантажити дані. Перевірте чи запущений бекенд на порту 5000.');
+        }
+
+        this.loading.set(false);
         setTimeout(() => this.initCharts(orders, ingredients), 100);
       },
-      error: () => this.loading.set(false)
+      // ✅ тепер цей error спрацює лише якщо сам forkJoin впав (не повинно, бо catchError вище)
+      error: (err) => {
+        this.errorMsg.set('Помилка завантаження: ' + (err?.message ?? 'невідома помилка'));
+        this.loading.set(false);
+      }
     });
   }
 
@@ -290,7 +320,6 @@ export class DashboardComponent implements OnInit {
     // 1. Динаміка продажів
     if (this.salesChart) this.salesChart.destroy();
     
-    // Групуємо замовлення за останні 7 днів
     const dates = [...Array(7)].map((_, i) => {
       const d = new Date(); d.setDate(d.getDate() - i);
       return d.toISOString().split('T')[0];
@@ -306,7 +335,7 @@ export class DashboardComponent implements OnInit {
       this.salesChart = new Chart(ctxSales, {
         type: 'bar',
         data: {
-          labels: dates.map(d => d.substring(5).replace('-', '.')), // 'MM.DD'
+          labels: dates.map(d => d.substring(5).replace('-', '.')),
           datasets: [{
             label: 'Виторг (₴)',
             data: salesData,
