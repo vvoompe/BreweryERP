@@ -31,10 +31,12 @@ export class ApiService {
   deleteIngredient(id: number):   Observable<void>         { return this.http.delete<void>(`${BASE}/ingredients/${id}`); }
 
   // ── Suppliers ──────────────────────────────────────────────────────────────
-  getSuppliers():                 Observable<Supplier[]>   { return this.http.get<Supplier[]>(`${BASE}/suppliers`); }
+  getSuppliers(): Observable<Supplier[]> { return this.http.get<Supplier[]>(`${BASE}/suppliers`); }
+  getSupplier(id: number): Observable<Supplier> { return this.http.get<Supplier>(`${BASE}/suppliers/${id}`); }
   createSupplier(s: Partial<Supplier>): Observable<Supplier> { return this.http.post<Supplier>(`${BASE}/suppliers`, s); }
-  updateSupplier(id: number, s: Partial<Supplier>): Observable<void> { return this.http.put<void>(`${BASE}/suppliers/${id}`, s); }
-  deleteSupplier(id: number):     Observable<void>         { return this.http.delete<void>(`${BASE}/suppliers/${id}`); }
+  updateSupplier(id: number, s: Partial<Supplier>): Observable<Supplier> { return this.http.put<Supplier>(`${BASE}/suppliers/${id}`, s); }
+  deleteSupplier(id: number): Observable<void> { return this.http.delete<void>(`${BASE}/suppliers/${id}`); }
+  getSupplierInvoices(id: number): Observable<SupplyInvoice[]> { return this.http.get<SupplyInvoice[]>(`${BASE}/suppliers/${id}/invoices`); }
 
   // ── SupplyInvoices ─────────────────────────────────────────────────────────
   getInvoices():                  Observable<SupplyInvoice[]> { return this.http.get<SupplyInvoice[]>(`${BASE}/supplyinvoices`); }

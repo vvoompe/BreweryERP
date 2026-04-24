@@ -28,8 +28,8 @@ public class SalesOrderService : ISalesOrderService
                 o.Client.Name,
                 o.OrderDate,
                 o.Status.ToString(),
-                o.Items.Sum(i => i.Quantity * i.PriceAtMoment),
-                o.Items.Sum(i => i.Quantity * i.PriceAtMoment) - o.Items.Sum(i => i.Quantity * i.ProductSku.UnitCost),
+                o.Items.Sum(i => (decimal?)(i.Quantity * i.PriceAtMoment)) ?? 0m,
+                (o.Items.Sum(i => (decimal?)(i.Quantity * i.PriceAtMoment)) ?? 0m) - (o.Items.Sum(i => (decimal?)(i.Quantity * i.ProductSku.UnitCost)) ?? 0m),
                 o.Items.Count))
             .ToListAsync();
     }

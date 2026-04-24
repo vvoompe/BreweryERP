@@ -16,7 +16,12 @@ namespace BreweryERP.Api.Controllers;
 public class BatchesController : ControllerBase
 {
     private readonly IBatchService _service;
-    public BatchesController(IBatchService service) => _service = service;
+    private readonly ILogger<BatchesController> _logger;
+    public BatchesController(IBatchService service, ILogger<BatchesController> logger)
+    {
+        _service = service;
+        _logger = logger;
+    }
 
     /// <summary>Список усіх варок.</summary>
     [HttpGet]
@@ -50,8 +55,46 @@ public class BatchesController : ControllerBase
             var (batch, writeoffs) = await _service.CreateAsync(request);
             return Ok(new { batch, stockWriteoffs = writeoffs });
         }
-        catch (KeyNotFoundException ex)      { return NotFound(new { message = ex.Message }); }
-        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "CreateBatch: KeyNotFoundException");
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "CreateBatch: InvalidOperationException");
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CreateBatch: Unhandled Exception during batch creation. Payload: {@Request}", request);
+            return StatusCode(500, new { message = "Внутрішня помилка сервера при створенні партії.", error = ex.Message });
+        }
+    }
+
+    /// <summary>Оновити партію (повне редагування).</summary>
+    [HttpPut("{id:int}")]
+    [Authorize(Policy = "BrewerOrAdmin")]
+    [ProducesResponseType(typeof(BatchDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateBatchRequest request)
+    {
+        try
+        {
+            var result = await _service.UpdateAsync(id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "UpdateBatch: KeyNotFoundException for {BatchId}", id);
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UpdateBatch: Error updating batch {BatchId}", id);
+            return StatusCode(500, new { message = ex.Message });
+        }
     }
 
     /// <summary>

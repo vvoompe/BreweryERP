@@ -5,6 +5,7 @@ namespace BreweryERP.Api.Services;
 public interface ISupplyInvoiceService
 {
     Task<IEnumerable<SupplyInvoiceListDto>> GetAllAsync();
+    Task<IEnumerable<SupplyInvoiceListDto>> GetBySupplierIdAsync(int supplierId);
     Task<SupplyInvoiceDto?> GetByIdAsync(int id);
     /// <summary>
     /// Патерн "Головний-підлеглий" + бізнес-логіка ролі Warehouse:

@@ -164,6 +164,7 @@ public class Batch
     public DateTime    StartDate { get; set; }
     public decimal?    ActualAbv { get; set; }
     public int?        ActualSrm { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public decimal     EstimatedCost { get; set; } // ★ NEW: Собівартість партії
 
     // Navigation

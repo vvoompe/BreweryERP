@@ -33,6 +33,23 @@ public class SupplyInvoiceService : ISupplyInvoiceService
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<SupplyInvoiceListDto>> GetBySupplierIdAsync(int supplierId)
+    {
+        return await _db.SupplyInvoices
+            .AsNoTracking()
+            .Include(i => i.Supplier)
+            .Include(i => i.Items)
+            .Where(i => i.SupplierId == supplierId)
+            .OrderByDescending(i => i.ReceiveDate)
+            .Select(i => new SupplyInvoiceListDto(
+                i.InvoiceId,
+                i.Supplier.Name,
+                i.DocNumber,
+                i.ReceiveDate,
+                i.Items.Count))
+            .ToListAsync();
+    }
+
     // ── GET BY ID ─────────────────────────────────────────────────────────────
     public async Task<SupplyInvoiceDto?> GetByIdAsync(int id)
     {

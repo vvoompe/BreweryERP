@@ -8,7 +8,19 @@ namespace BreweryERP.Api.DTOs.Batches;
 /// При створенні Batch автоматично списується сировина зі складу
 /// (Brewer role business logic у BatchService).
 /// </summary>
-public record CreateBatchRequest(int RecipeId);
+public record CreateBatchRequest(
+    int RecipeId,
+    string Status,
+    DateTime StartDate,
+    decimal? ActualAbv,
+    int? ActualSrm);
+
+public record UpdateBatchRequest(
+    int RecipeId,
+    string Status,
+    DateTime StartDate,
+    decimal? ActualAbv,
+    int? ActualSrm);
 
 public record UpdateBatchStatusRequest(BatchStatus Status, decimal? ActualAbv, int? ActualSrm);
 

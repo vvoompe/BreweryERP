@@ -14,7 +14,21 @@ namespace BreweryERP.Api.Controllers;
 public class SuppliersController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
-    public SuppliersController(ApplicationDbContext db) => _db = db;
+    private readonly BreweryERP.Api.Services.ISupplyInvoiceService _invoiceService;
+
+    public SuppliersController(ApplicationDbContext db, BreweryERP.Api.Services.ISupplyInvoiceService invoiceService)
+    {
+        _db = db;
+        _invoiceService = invoiceService;
+    }
+
+    [HttpGet("{id:int}/invoices")]
+    [ProducesResponseType(typeof(IEnumerable<BreweryERP.Api.DTOs.SupplyInvoices.SupplyInvoiceListDto>), 200)]
+    public async Task<IActionResult> GetInvoices(int id)
+    {
+        var invoices = await _invoiceService.GetBySupplierIdAsync(id);
+        return Ok(invoices);
+    }
 
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<SupplierDto>), 200)]

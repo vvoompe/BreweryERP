@@ -3,7 +3,7 @@ import { CommonModule }              from '@angular/common';
 import { FormsModule }               from '@angular/forms';
 import { Observable }                from 'rxjs';
 import { ApiService }                from '../../core/api.service';
-import { Supplier }                  from '../../core/models';
+import { Supplier, SupplyInvoice }           from '../../core/models';
 
 @Component({
   selector: 'app-suppliers',
@@ -61,6 +61,7 @@ import { Supplier }                  from '../../core/models';
                   <td class="font-mono text-muted">{{ s.edrpou ?? '—' }}</td>
                   <td>
                     <div class="row-actions">
+                      <button class="btn btn-ghost btn-sm" (click)="viewInvoices(s)" title="Історія постачань">📦 Історія</button>
                       <button class="btn btn-ghost btn-icon btn-sm" (click)="edit(s)">✏️</button>
                       <button class="btn btn-danger btn-icon btn-sm" (click)="remove(s.supplierId)">🗑</button>
                     </div>
@@ -99,6 +100,52 @@ import { Supplier }                  from '../../core/models';
         </div>
       </div>
     }
+
+    <!-- Invoices Modal -->
+    @if (showInvoicesModal()) {
+      <div class="modal-backdrop" (click)="closeInvoicesModal()">
+        <div class="modal modal-lg animate-in" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>📦 Історія постачань: {{ selectedSupplier()?.name }}</h3>
+            <button class="btn btn-ghost btn-icon" (click)="closeInvoicesModal()">✕</button>
+          </div>
+          
+          <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            @if (invoicesLoading()) {
+              <div class="loading"><div class="spinner"></div> Завантаження...</div>
+            } @else if (supplierInvoices().length === 0) {
+              <div class="empty-state">
+                <div class="empty-icon">📦</div>
+                <h3>Постачань не знайдено</h3>
+              </div>
+            } @else {
+              <table>
+                <thead>
+                  <tr>
+                    <th>№ Документа</th>
+                    <th>Дата</th>
+                    <th>Позицій</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (inv of supplierInvoices(); track inv.invoiceId) {
+                    <tr>
+                      <td class="font-mono"><strong>{{ inv.docNumber }}</strong></td>
+                      <td>{{ inv.receiveDate | date:'dd.MM.yyyy' }}</td>
+                      <td>{{ inv.items ? inv.items.length : 0 }} шт.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-ghost" (click)="closeInvoicesModal()">Закрити</button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .supplier-dot {
@@ -120,6 +167,11 @@ export class SuppliersComponent implements OnInit {
   searchQuery = '';
   form: Partial<Supplier> = { name:'', edrpou:'' };
   private editId = 0;
+
+  showInvoicesModal = signal(false);
+  selectedSupplier = signal<Supplier | null>(null);
+  supplierInvoices = signal<SupplyInvoice[]>([]);
+  invoicesLoading = signal(false);
 
   constructor(private api: ApiService) {}
   ngOnInit() { this.load(); }
@@ -158,4 +210,23 @@ export class SuppliersComponent implements OnInit {
   }
 
   closeModal() { this.showModal.set(false); }
+
+  viewInvoices(s: Supplier) {
+    this.selectedSupplier.set(s);
+    this.showInvoicesModal.set(true);
+    this.invoicesLoading.set(true);
+    this.api.getSupplierInvoices(s.supplierId).subscribe({
+      next: (invoices) => {
+        this.supplierInvoices.set(invoices);
+        this.invoicesLoading.set(false);
+      },
+      error: () => this.invoicesLoading.set(false)
+    });
+  }
+
+  closeInvoicesModal() {
+    this.showInvoicesModal.set(false);
+    this.selectedSupplier.set(null);
+    this.supplierInvoices.set([]);
+  }
 }

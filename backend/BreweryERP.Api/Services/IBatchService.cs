@@ -13,5 +13,6 @@ public interface IBatchService
     /// з рецепту. Кидає InvalidOperationException якщо запасів не вистачає.
     /// </summary>
     Task<(BatchDto Batch, IList<BatchStockWriteoffDto> Writeoffs)> CreateAsync(CreateBatchRequest request);
+    Task<BatchDto> UpdateAsync(int batchId, UpdateBatchRequest request);
     Task<BatchDto> UpdateStatusAsync(int batchId, UpdateBatchStatusRequest request);
 }

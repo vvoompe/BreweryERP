@@ -97,8 +97,10 @@ public class BatchService : IBatchService
                 var batch = new Batch
                 {
                     RecipeId  = recipe.RecipeId,
-                    Status    = BatchStatus.Brewing,
-                    StartDate = DateTime.UtcNow,
+                    Status    = Enum.TryParse<BatchStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : BatchStatus.Brewing,
+                    StartDate = request.StartDate == default ? DateTime.UtcNow : request.StartDate,
+                    ActualAbv = request.ActualAbv,
+                    ActualSrm = request.ActualSrm,
                     EstimatedCost = estimatedCost
                 };
                 _db.Batches.Add(batch);
@@ -140,6 +142,39 @@ public class BatchService : IBatchService
         });
 
         return (batchResult!, writeoffsResult!);
+    }
+
+    // ── UPDATE FULL (Brewer, Admin) ───────────────────────────────────────────
+    public async Task<BatchDto> UpdateAsync(int batchId, UpdateBatchRequest request)
+    {
+        var batch = await _db.Batches
+            .Include(b => b.Recipe)
+                .ThenInclude(r => r.Style)
+            .FirstOrDefaultAsync(b => b.BatchId == batchId)
+            ?? throw new KeyNotFoundException($"Batch {batchId} not found.");
+
+        batch.RecipeId = request.RecipeId;
+        if (Enum.TryParse<BatchStatus>(request.Status, true, out var parsedStatus))
+        {
+            batch.Status = parsedStatus;
+        }
+        if (request.StartDate != default)
+        {
+            batch.StartDate = request.StartDate;
+        }
+        batch.ActualAbv = request.ActualAbv;
+        batch.ActualSrm = request.ActualSrm;
+
+        _db.ActivityLogs.Add(new ActivityLog {
+            Action = "Batch Updated",
+            EntityName = "Batch",
+            EntityId = batch.BatchId,
+            Details = $"Batch {batchId} was fully updated",
+            UserName = "System"
+        });
+
+        await _db.SaveChangesAsync();
+        return MapToDto(batch);
     }
 
     // ── UPDATE STATUS ─────────────────────────────────────────────────────────
