@@ -7,13 +7,15 @@ namespace BreweryERP.Api.DTOs.Batches;
 /// <summary>
 /// При створенні Batch автоматично списується сировина зі складу
 /// (Brewer role business logic у BatchService).
+/// Параметри Status/StartDate/ActualAbv/ActualSrm є необов'язковими —
+/// BatchService застосує розумні значення за замовчуванням.
 /// </summary>
 public record CreateBatchRequest(
     int RecipeId,
-    string Status,
-    DateTime StartDate,
-    decimal? ActualAbv,
-    int? ActualSrm);
+    string?  Status    = null,
+    DateTime StartDate = default,
+    decimal? ActualAbv = null,
+    int?     ActualSrm = null);
 
 public record UpdateBatchRequest(
     int RecipeId,

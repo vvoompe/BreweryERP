@@ -97,7 +97,7 @@ public class BatchService : IBatchService
                 var batch = new Batch
                 {
                     RecipeId  = recipe.RecipeId,
-                    Status    = Enum.TryParse<BatchStatus>(request.Status, true, out var parsedStatus) ? parsedStatus : BatchStatus.Brewing,
+                    Status    = (!string.IsNullOrEmpty(request.Status) && Enum.TryParse<BatchStatus>(request.Status, true, out var parsedStatus)) ? parsedStatus : BatchStatus.Brewing,
                     StartDate = request.StartDate == default ? DateTime.UtcNow : request.StartDate,
                     ActualAbv = request.ActualAbv,
                     ActualSrm = request.ActualSrm,
