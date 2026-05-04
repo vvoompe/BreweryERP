@@ -47,9 +47,9 @@ import { BeerStyle }                 from '../../core/models';
             <div class="style-card card">
               <div class="style-header">
                 <div class="style-number">{{ s.styleId }}</div>
-                <div class="style-actions">
-                  <button class="btn btn-ghost btn-icon btn-sm" (click)="edit(s)" title="Редагувати">✏️</button>
-                  <button class="btn btn-danger btn-icon btn-sm" (click)="remove(s.styleId)" title="Видалити">🗑</button>
+              <div class="style-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" (click)="edit(s)" title="Редагувати" style="padding:5px 8px; font-size:0.85rem;">✏</button>
+                  <button class="btn btn-danger btn-icon btn-sm" (click)="remove(s.styleId)" title="Видалити" style="padding:5px 8px; font-size:0.85rem;">🗑</button>
                 </div>
               </div>
               <div class="style-body">
