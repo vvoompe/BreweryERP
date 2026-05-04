@@ -46,39 +46,39 @@ import { BeerStyle }                 from '../../core/models';
           @for (s of filtered(); track s.styleId) {
             <div class="style-card card">
               <div class="style-header">
-                <div class="style-number">{{ s.styleId }}</div>
-              <div class="style-actions">
-                  <button class="btn btn-ghost btn-icon btn-sm" (click)="edit(s)" title="Редагувати" style="padding:5px 8px; font-size:0.85rem;">✏</button>
-                  <button class="btn btn-danger btn-icon btn-sm" (click)="remove(s.styleId)" title="Видалити" style="padding:5px 8px; font-size:0.85rem;">🗑</button>
+                <div class="style-number">#{{ s.styleId }}</div>
+                <div class="style-actions">
+                  <button class="btn btn-ghost btn-sm" (click)="edit(s)">Ред.</button>
+                  <button class="btn btn-danger btn-sm" (click)="remove(s.styleId)">Вид.</button>
                 </div>
               </div>
               <div class="style-body">
                 <h4>{{ s.name }}</h4>
-                @if (s.description) {
-                  <p class="style-desc">{{ s.description }}</p>
-                }
+                <p class="style-desc">{{ s.description || 'Опис не вказано' }}</p>
               </div>
               <div class="style-footer">
-                @if (s.minAbv != null || s.maxAbv != null) {
-                  <div class="style-param">
-                    <span class="param-label">ABV</span>
-                    <span class="param-value text-amber">{{ s.minAbv ?? '?' }}–{{ s.maxAbv ?? '?' }}%</span>
-                  </div>
-                }
-                @if (s.minIbu != null || s.maxIbu != null) {
-                  <div class="style-param">
-                    <span class="param-label">IBU</span>
-                    <span class="param-value">{{ s.minIbu ?? '?' }}–{{ s.maxIbu ?? '?' }}</span>
-                  </div>
-                }
-                @if (s.minSrm != null || s.maxSrm != null) {
-                  <div class="style-param">
-                    <span class="param-label">SRM</span>
+                <div class="style-param">
+                  <span class="param-label">ABV</span>
+                  <span class="param-value text-amber">
+                    @if (s.minAbv != null || s.maxAbv != null) { {{ s.minAbv ?? '?' }}–{{ s.maxAbv ?? '?' }}%
+                    } @else { — }
+                  </span>
+                </div>
+                <div class="style-param">
+                  <span class="param-label">IBU</span>
+                  <span class="param-value">
+                    @if (s.minIbu != null || s.maxIbu != null) { {{ s.minIbu ?? '?' }}–{{ s.maxIbu ?? '?' }}
+                    } @else { — }
+                  </span>
+                </div>
+                <div class="style-param">
+                  <span class="param-label">SRM</span>
+                  @if (s.minSrm != null || s.maxSrm != null) {
                     <div class="srm-swatch" [style.background]="srmToHex(((s.minSrm ?? 0) + (s.maxSrm ?? 0)) / 2)">
                       {{ s.minSrm ?? '?' }}–{{ s.maxSrm ?? '?' }}
                     </div>
-                  </div>
-                }
+                  } @else { <span>—</span> }
+                </div>
               </div>
             </div>
           }
@@ -189,7 +189,13 @@ import { BeerStyle }                 from '../../core/models';
       padding: 2px 7px;
       border-radius: var(--radius-full);
     }
-    .style-actions { display: flex; gap: 2px; }
+    .style-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .style-card:hover .style-actions { opacity: 1; }
 
     .style-body { padding: 12px 14px; flex: 1; }
     .style-body h4 { font-size: 0.95rem; margin-bottom: 4px; }

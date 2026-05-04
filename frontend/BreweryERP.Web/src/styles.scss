@@ -468,13 +468,6 @@ select option {
 }
 tbody tr:hover .row-actions { opacity: 1; }
 
-/* Card actions — always visible (cards aren't in tbody) */
-.style-actions {
-  display: flex;
-  gap: 4px;
-  opacity: 1;
-}
-
 /* ---------- Divider ---------- */
 .divider {
   height: 1px;
