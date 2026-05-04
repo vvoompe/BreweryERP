@@ -10,6 +10,12 @@ namespace BreweryERP.Tests.Services;
 /// </summary>
 public class ImportParserTests
 {
+    // ── Shared test data (CA1861: static readonly замість inline масивів) ──────
+    private static readonly string[] SimpleCsvFields         = ["Pilsner Malt", "Malt", "500", "kg"];
+    private static readonly string[] SemicolonCsvFields      = ["Cascade Hops", "Hop", "50", "kg"];
+    private static readonly string[] QuotedCsvFields         = ["Malt, Pilsner", "Malt", "500", "kg"];
+    private static readonly string[] DoubleQuoteCsvFields    = ["He said \"hello\"", "Malt", "100", "kg"];
+    private static readonly string[] EmptyFieldsCsvFields    = ["Name", "", "100", ""];
     // ══════════════════════════════════════════════════════════════════════════
     // ColLetter
     // ══════════════════════════════════════════════════════════════════════════
@@ -74,35 +80,35 @@ public class ImportParserTests
     public void ParseCsvLine_SimpleComma_SplitsCorrectly()
     {
         var result = ImportParser.ParseCsvLine("Pilsner Malt,Malt,500,kg", ',');
-        Assert.Equal(new string[] { "Pilsner Malt", "Malt", "500", "kg" }, result);
+        Assert.Equal(SimpleCsvFields, result);
     }
 
     [Fact]
     public void ParseCsvLine_Semicolon_SplitsCorrectly()
     {
         var result = ImportParser.ParseCsvLine("Cascade Hops;Hop;50;kg", ';');
-        Assert.Equal(new string[] { "Cascade Hops", "Hop", "50", "kg" }, result);
+        Assert.Equal(SemicolonCsvFields, result);
     }
 
     [Fact]
     public void ParseCsvLine_QuotedFieldWithComma_TreatedAsSingleField()
     {
         var result = ImportParser.ParseCsvLine("\"Malt, Pilsner\",Malt,500,kg", ',');
-        Assert.Equal(new string[] { "Malt, Pilsner", "Malt", "500", "kg" }, result);
+        Assert.Equal(QuotedCsvFields, result);
     }
 
     [Fact]
     public void ParseCsvLine_DoubleQuoteEscape_ProducesOneQuote()
     {
         var result = ImportParser.ParseCsvLine("\"He said \"\"hello\"\"\",Malt,100,kg", ',');
-        Assert.Equal(new string[] { "He said \"hello\"", "Malt", "100", "kg" }, result);
+        Assert.Equal(DoubleQuoteCsvFields, result);
     }
 
     [Fact]
     public void ParseCsvLine_EmptyFields_ReturnEmptyStrings()
     {
         var result = ImportParser.ParseCsvLine("Name,,100,", ',');
-        Assert.Equal(new string[] { "Name", "", "100", "" }, result);
+        Assert.Equal(EmptyFieldsCsvFields, result);
     }
 
     [Fact]
@@ -354,9 +360,9 @@ public class ImportParserTests
     public void ResolveMapping_UserOverridesAutoDetect()
     {
         var auto = new DetectedMapping(1, 2, 3, 4, 5, 6);
-        var result = ImportParser.ResolveMapping(auto, 10, 0, 0, 0, 0, 0);
-        Assert.Equal(10, result.ColName); // user overrides
-        Assert.Equal(2,  result.ColType); // auto used
+        var (colName, colType, _, _, _, _) = ImportParser.ResolveMapping(auto, 10, 0, 0, 0, 0, 0);
+        Assert.Equal(10, colName); // user overrides
+        Assert.Equal(2,  colType); // auto used
     }
 
     [Fact]

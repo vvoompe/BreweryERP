@@ -12,24 +12,24 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
     // ──────────────────────────────────────────────
     // DbSet-и — по одному на кожну таблицю
-    // EF Core ініціалізує їх через reflection, тому 'required' усуває CS8618
+    // EF Core ініціалізує їх через reflection після конструктора;
+    // null! знімає CS8618 і є стандартним EF Core патерном
     // ──────────────────────────────────────────────
-    public required DbSet<BeerStyle> BeerStyles { get; set; }
-    public required DbSet<Ingredient> Ingredients { get; set; }
-    public required DbSet<Supplier> Suppliers { get; set; }
-    public required DbSet<SupplyInvoice> SupplyInvoices { get; set; }
-    public required DbSet<InvoiceItem> InvoiceItems { get; set; }
-    public required DbSet<Recipe> Recipes { get; set; }
-    public required DbSet<RecipeItem> RecipeItems { get; set; }
-    public required DbSet<Batch> Batches { get; set; }
-    public required DbSet<ProductSku> ProductSkus { get; set; }
-    public required DbSet<Client> Clients { get; set; }
-    public required DbSet<SalesOrder> SalesOrders { get; set; }
-    public required DbSet<OrderItem> OrderItems { get; set; }
-    public required DbSet<ImportLog> ImportLogs { get; set; }
-    public required DbSet<ActivityLog> ActivityLogs { get; set; }
+    public DbSet<BeerStyle>     BeerStyles     { get; set; } = null!;
+    public DbSet<Ingredient>    Ingredients    { get; set; } = null!;
+    public DbSet<Supplier>      Suppliers      { get; set; } = null!;
+    public DbSet<SupplyInvoice> SupplyInvoices { get; set; } = null!;
+    public DbSet<InvoiceItem>   InvoiceItems   { get; set; } = null!;
+    public DbSet<Recipe>        Recipes        { get; set; } = null!;
+    public DbSet<RecipeItem>    RecipeItems    { get; set; } = null!;
+    public DbSet<Batch>         Batches        { get; set; } = null!;
+    public DbSet<ProductSku>    ProductSkus    { get; set; } = null!;
+    public DbSet<Client>        Clients        { get; set; } = null!;
+    public DbSet<SalesOrder>    SalesOrders    { get; set; } = null!;
+    public DbSet<OrderItem>     OrderItems     { get; set; } = null!;
+    public DbSet<ImportLog>     ImportLogs     { get; set; } = null!;
+    public DbSet<ActivityLog>   ActivityLogs   { get; set; } = null!;
 
-    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options) { }
 
