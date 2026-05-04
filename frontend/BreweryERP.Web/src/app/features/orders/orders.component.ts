@@ -259,6 +259,11 @@ interface OrderItemForm { skuId: number; quantity: number; price: number; packag
               <option value="Paid">Оплачено</option>
             </select>
           </div>
+          @if (formError()) {
+            <div style="color:var(--danger); font-size:0.85rem; padding: 0 1.5rem 0.5rem;">
+              ⚠️ {{ formError() }}
+            </div>
+          }
           <div class="modal-footer">
             <button class="btn btn-ghost" (click)="showStatusModal.set(false)">Скасувати</button>
             <button class="btn btn-primary" (click)="saveStatus()" [disabled]="saving()">
@@ -396,9 +401,19 @@ export class OrdersComponent implements OnInit {
     const o = this.statusOrder();
     if (!o) return;
     this.saving.set(true);
+    this.formError.set('');
     this.api.updateOrderStatus(o.orderId, this.newStatus).subscribe({
-      next: () => { this.saving.set(false); this.showStatusModal.set(false); this.load(); },
-      error: () => this.saving.set(false)
+      next: (updated) => {
+        this.saving.set(false);
+        this.showStatusModal.set(false);
+        // Оновлюємо замовлення в локальному списку без повного reload
+        this.orders.update(list => list.map(x => x.orderId === updated.orderId ? { ...x, status: updated.status } : x));
+        this.applyFilter();
+      },
+      error: (err: any) => {
+        this.saving.set(false);
+        this.formError.set(err?.error?.message ?? 'Помилка при зміні статусу замовлення.');
+      }
     });
   }
 

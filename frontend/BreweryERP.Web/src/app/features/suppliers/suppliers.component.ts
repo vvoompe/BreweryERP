@@ -3,7 +3,7 @@ import { CommonModule }              from '@angular/common';
 import { FormsModule }               from '@angular/forms';
 import { Observable }                from 'rxjs';
 import { ApiService }                from '../../core/api.service';
-import { Supplier, SupplyInvoice }           from '../../core/models';
+import { Supplier, SupplyInvoice }   from '../../core/models';
 
 @Component({
   selector: 'app-suppliers',
@@ -74,7 +74,7 @@ import { Supplier, SupplyInvoice }           from '../../core/models';
       }
     </div>
 
-    <!-- Modal -->
+    <!-- Modal додавання/редагування постачальника -->
     @if (showModal()) {
       <div class="modal-backdrop" (click)="closeModal()">
         <div class="modal animate-in" (click)="$event.stopPropagation()">
@@ -101,7 +101,7 @@ import { Supplier, SupplyInvoice }           from '../../core/models';
       </div>
     }
 
-    <!-- Invoices Modal -->
+    <!-- Модалка: Історія постачань постачальника -->
     @if (showInvoicesModal()) {
       <div class="modal-backdrop" (click)="closeInvoicesModal()">
         <div class="modal modal-lg animate-in" (click)="$event.stopPropagation()">
@@ -109,7 +109,7 @@ import { Supplier, SupplyInvoice }           from '../../core/models';
             <h3>📦 Історія постачань: {{ selectedSupplier()?.name }}</h3>
             <button class="btn btn-ghost btn-icon" (click)="closeInvoicesModal()">✕</button>
           </div>
-          
+
           <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
             @if (invoicesLoading()) {
               <div class="loading"><div class="spinner"></div> Завантаження...</div>
@@ -117,14 +117,16 @@ import { Supplier, SupplyInvoice }           from '../../core/models';
               <div class="empty-state">
                 <div class="empty-icon">📦</div>
                 <h3>Постачань не знайдено</h3>
+                <p class="text-muted">Цей постачальник ще не надсилав накладних</p>
               </div>
             } @else {
               <table>
                 <thead>
                   <tr>
                     <th>№ Документа</th>
-                    <th>Дата</th>
+                    <th>Дата отримання</th>
                     <th>Позицій</th>
+                    <th>Дії</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -132,7 +134,17 @@ import { Supplier, SupplyInvoice }           from '../../core/models';
                     <tr>
                       <td class="font-mono"><strong>{{ inv.docNumber }}</strong></td>
                       <td>{{ inv.receiveDate | date:'dd.MM.yyyy' }}</td>
-                      <td>{{ inv.items ? inv.items.length : 0 }} шт.</td>
+                      <!-- ВИПРАВЛЕНО: читаємо itemCount (є в списку), а не items.length (якого немає в списку) -->
+                      <td>
+                        <span class="badge badge-inactive">
+                          {{ inv.itemCount ?? inv.items.length }} шт.
+                        </span>
+                      </td>
+                      <td>
+                        <button class="btn btn-ghost btn-sm" (click)="viewInvoiceDetails(inv.invoiceId)">
+                          🔍 Деталі
+                        </button>
+                      </td>
                     </tr>
                   }
                 </tbody>
@@ -142,6 +154,53 @@ import { Supplier, SupplyInvoice }           from '../../core/models';
 
           <div class="modal-footer">
             <button class="btn btn-ghost" (click)="closeInvoicesModal()">Закрити</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Модалка: Деталі конкретної накладної -->
+    @if (showDetailsModal()) {
+      <div class="modal-backdrop" (click)="closeDetailsModal()">
+        <div class="modal modal-lg animate-in" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>📋 Деталі накладної: {{ selectedInvoice()?.docNumber }}</h3>
+            <button class="btn btn-ghost btn-icon" (click)="closeDetailsModal()">✕</button>
+          </div>
+
+          <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            @if (detailsLoading()) {
+              <div class="loading"><div class="spinner"></div> Завантаження...</div>
+            } @else if (selectedInvoice()) {
+              <div style="margin-bottom: 12px; color: var(--text-muted); font-size: 0.85rem;">
+                Постачальник: <strong>{{ selectedInvoice()!.supplierName }}</strong> &nbsp;|&nbsp;
+                Дата: <strong>{{ selectedInvoice()!.receiveDate | date:'dd.MM.yyyy' }}</strong>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Інгредієнт</th>
+                    <th>Кількість</th>
+                    <th>Ціна за од.</th>
+                    <th>Термін придатності</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of selectedInvoice()!.items; track item.ingredientId) {
+                    <tr>
+                      <td><strong>{{ item.ingredientName }}</strong></td>
+                      <td>{{ item.quantity }} {{ item.unit ?? '' }}</td>
+                      <td>{{ item.unitPrice != null ? (item.unitPrice | number:'1.2-2') + ' грн' : '—' }}</td>
+                      <td>{{ item.expirationDate ? (item.expirationDate | date:'dd.MM.yyyy') : '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-ghost" (click)="closeDetailsModal()">Закрити</button>
           </div>
         </div>
       </div>
@@ -168,17 +227,26 @@ export class SuppliersComponent implements OnInit {
   form: Partial<Supplier> = { name:'', edrpou:'' };
   private editId = 0;
 
-  showInvoicesModal = signal(false);
-  selectedSupplier = signal<Supplier | null>(null);
-  supplierInvoices = signal<SupplyInvoice[]>([]);
-  invoicesLoading = signal(false);
+  // Модалка "Історія постачань"
+  showInvoicesModal  = signal(false);
+  selectedSupplier   = signal<Supplier | null>(null);
+  supplierInvoices   = signal<SupplyInvoice[]>([]);
+  invoicesLoading    = signal(false);
+
+  // Модалка "Деталі накладної"
+  showDetailsModal   = signal(false);
+  selectedInvoice    = signal<SupplyInvoice | null>(null);
+  detailsLoading     = signal(false);
 
   constructor(private api: ApiService) {}
   ngOnInit() { this.load(); }
 
   load() {
     this.loading.set(true);
-    this.api.getSuppliers().subscribe({ next: s => { this.suppliers.set(s); this.applyFilter(); this.loading.set(false); }, error: () => this.loading.set(false) });
+    this.api.getSuppliers().subscribe({
+      next: s => { this.suppliers.set(s); this.applyFilter(); this.loading.set(false); },
+      error: () => this.loading.set(false)
+    });
   }
 
   applyFilter() {
@@ -200,8 +268,13 @@ export class SuppliersComponent implements OnInit {
 
   save() {
     this.saving.set(true);
-    const obs: Observable<any> = this.editing() ? this.api.updateSupplier(this.editId, this.form) : this.api.createSupplier(this.form);
-    obs.subscribe({ next: () => { this.saving.set(false); this.closeModal(); this.load(); }, error: () => this.saving.set(false) });
+    const obs: Observable<any> = this.editing()
+      ? this.api.updateSupplier(this.editId, this.form)
+      : this.api.createSupplier(this.form);
+    obs.subscribe({
+      next: () => { this.saving.set(false); this.closeModal(); this.load(); },
+      error: () => this.saving.set(false)
+    });
   }
 
   remove(id: number) {
@@ -211,6 +284,7 @@ export class SuppliersComponent implements OnInit {
 
   closeModal() { this.showModal.set(false); }
 
+  // ── Відкрити список накладних постачальника ────────────────────────────────
   viewInvoices(s: Supplier) {
     this.selectedSupplier.set(s);
     this.showInvoicesModal.set(true);
@@ -228,5 +302,24 @@ export class SuppliersComponent implements OnInit {
     this.showInvoicesModal.set(false);
     this.selectedSupplier.set(null);
     this.supplierInvoices.set([]);
+  }
+
+  // ── Відкрити деталі конкретної накладної ──────────────────────────────────
+  viewInvoiceDetails(invoiceId: number) {
+    this.showDetailsModal.set(true);
+    this.detailsLoading.set(true);
+    this.selectedInvoice.set(null);
+    this.api.getInvoiceById(invoiceId).subscribe({
+      next: (inv) => {
+        this.selectedInvoice.set(inv);
+        this.detailsLoading.set(false);
+      },
+      error: () => this.detailsLoading.set(false)
+    });
+  }
+
+  closeDetailsModal() {
+    this.showDetailsModal.set(false);
+    this.selectedInvoice.set(null);
   }
 }

@@ -39,9 +39,10 @@ export class ApiService {
   getSupplierInvoices(id: number): Observable<SupplyInvoice[]> { return this.http.get<SupplyInvoice[]>(`${BASE}/suppliers/${id}/invoices`); }
 
   // ── SupplyInvoices ─────────────────────────────────────────────────────────
-  getInvoices():                  Observable<SupplyInvoice[]> { return this.http.get<SupplyInvoice[]>(`${BASE}/supplyinvoices`); }
+  getInvoices():                  Observable<SupplyInvoice[]>  { return this.http.get<SupplyInvoice[]>(`${BASE}/supplyinvoices`); }
+  getInvoiceById(id: number):     Observable<SupplyInvoice>    { return this.http.get<SupplyInvoice>(`${BASE}/supplyinvoices/${id}`); }
   createInvoice(inv: Partial<SupplyInvoice>): Observable<SupplyInvoice> { return this.http.post<SupplyInvoice>(`${BASE}/supplyinvoices`, inv); }
-  deleteInvoice(id: number):      Observable<void>            { return this.http.delete<void>(`${BASE}/supplyinvoices/${id}`); }
+  deleteInvoice(id: number):      Observable<void>             { return this.http.delete<void>(`${BASE}/supplyinvoices/${id}`); }
 
   // ── Recipes ────────────────────────────────────────────────────────────────
   getRecipes():                   Observable<Recipe[]>     { return this.http.get<Recipe[]>(`${BASE}/recipes`); }
@@ -75,8 +76,8 @@ export class ApiService {
   // ── SalesOrders ────────────────────────────────────────────────────────────
   getOrders():                                Observable<SalesOrder[]>  { return this.http.get<SalesOrder[]>(`${BASE}/salesorders`); }
   getOrder(id: number):                       Observable<SalesOrder>    { return this.http.get<SalesOrder>(`${BASE}/salesorders/${id}`); }
-  createOrder(o: CreateSalesOrderRequest):        Observable<SalesOrder>    { return this.http.post<SalesOrder>(`${BASE}/salesorders`, o); }
-  updateOrderStatus(id: number, status: string): Observable<void>       { return this.http.patch<void>(`${BASE}/salesorders/${id}/status`, { status }); }
+  createOrder(o: CreateSalesOrderRequest):    Observable<SalesOrder>    { return this.http.post<SalesOrder>(`${BASE}/salesorders`, o); }
+  updateOrderStatus(id: number, status: string): Observable<SalesOrder> { return this.http.patch<SalesOrder>(`${BASE}/salesorders/${id}/status`, { status }); }
 
   // ── Staff / Users (Admin only) ─────────────────────────────────────────────
   getStaff():                                Observable<StaffDto[]>   { return this.http.get<StaffDto[]>(`${BASE}/users`); }
